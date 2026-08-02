@@ -1,5 +1,5 @@
 import { Express } from "express";
-import { fetchAnimeCharacters, fetchAnimeDetails, fetchCharacterDetails, fetchSearchAnime, fetchTopAnime, getCachedProxy } from "../mal-proxy";
+import { fetchAnimeCharacters, fetchAnimeDetails, fetchCharacterDetails, fetchSearchAnime, fetchTopAnime, getCachedProxy } from "../mal-proxy/index.js";
 
 export async function apiRoutes(app: Express) {
     app.get("/api/proxy/top-anime", async (req, res) => {

@@ -1,3 +1,3 @@
-export * from './api.proxy';
-export * from './anime.proxy';
-export * from './character.proxy';
+export * from './api.proxy.js';
+export * from './anime.proxy.js';
+export * from './character.proxy.js';

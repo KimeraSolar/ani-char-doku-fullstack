@@ -1,5 +1,5 @@
 import { Express } from "express";
-import { fetchAllAnimes, saveAnimeRecord } from "../model/anime.model";
+import { fetchAllAnimes, saveAnimeRecord } from "../model/index.js";
 
 export async function animeRoutes(app: Express) {
     app.get("/api/database/animes", async (req, res) => {

@@ -1,4 +1,4 @@
-import { handleProxyResponse } from "./api.proxy";
+import { handleProxyResponse } from "./api.proxy.js";
 
 const API_BASE_URL = process.env.MAL_PROXY_API_BASE_URL || "";
 
