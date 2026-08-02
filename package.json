@@ -7,6 +7,7 @@
     "dev:frontend": "vite",
     "dev:backend": "tsx watch --env-file=.env api/index.ts",
     "build": "vite build",
+    "vercel-build": "esbuild api/index.ts --bundle --platform=node --format=esm --packages=external --outfile=api/index.js && vite build",
     "preview": "vite preview"
   },
   "keywords": [],
@@ -33,6 +34,7 @@
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
     "@vitejs/plugin-react": "^6.0.5",
+    "esbuild": "^0.28.1",
     "tsx": "^4.23.4",
     "typescript": "^5.9.3",
     "vite": "^8.2.0"
