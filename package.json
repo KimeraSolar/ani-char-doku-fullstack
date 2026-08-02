@@ -7,7 +7,7 @@
     "dev:frontend": "vite",
     "dev:backend": "tsx watch --env-file=.env api/index.ts",
     "build": "vite build",
-    "vercel-build": "esbuild api/index.ts --bundle --platform=node --format=esm --packages=external --outfile=api/index.js && vite build",
+    "vercel-build": "esbuild server/index.ts --bundle --platform=node --format=esm --packages=external --outfile=api/index.js && vite build",
     "preview": "vite preview"
   },
   "keywords": [],
