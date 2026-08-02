@@ -1,6 +1,6 @@
 import express, { Request, Response } from 'express';
 import cors from 'cors';
-import { apiRoutes } from './routes';
+import { animeRoutes, apiRoutes, firebaseRoutes } from './routes';
 
 const app = express();
 
@@ -15,6 +15,10 @@ app.get('/api/health', (req: Request, res: Response) => {
 
 // MAL API Proxy Routes
 await apiRoutes(app);
+
+// Firebase DB Routes
+await firebaseRoutes(app);
+await animeRoutes(app);
 
 if (process.env.NODE_ENV !== 'production') {
   const PORT = process.env.PORT || 3001;

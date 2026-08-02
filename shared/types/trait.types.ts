@@ -1,0 +1,9 @@
+export interface TraitOption {
+  name: string;
+  description: string;
+}
+
+export interface TraitDefinition {
+  label: string; // Friendly name, like "Special Ability"
+  placeholder?: string;
+}

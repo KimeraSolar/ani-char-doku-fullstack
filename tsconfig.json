@@ -3,6 +3,11 @@
     "target": "ES2022",
     "module": "ESNext",
     "moduleResolution": "bundler",
+    "ignoreDeprecations": "6.0",
+    "baseUrl": ".",
+    "paths": {
+      "@shared/*": ["shared/*"]
+    },
     "allowJs": true,
     "jsx": "react-jsx",
     "strict": true,
@@ -12,5 +17,5 @@
     "rootDir": ".",
     "outDir": "./dist"
   },
-  "include": ["src", "api"]
+  "include": ["src", "api", "shared"]
 }

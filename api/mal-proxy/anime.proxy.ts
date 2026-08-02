@@ -3,7 +3,6 @@ import { handleProxyResponse } from "./api.proxy";
 const API_BASE_URL = process.env.MAL_PROXY_API_BASE_URL || "";
 
 export async function fetchTopAnime(page: number, cacheKey: string) {
-  console.log(`API_BASE_URL: ${API_BASE_URL}`);
   const res = await fetch(`${API_BASE_URL}/top/anime?page=${page}`);
   return handleProxyResponse(res, cacheKey);
 }
