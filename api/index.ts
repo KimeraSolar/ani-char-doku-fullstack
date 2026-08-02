@@ -1,6 +1,6 @@
 import express, { Request, Response } from 'express';
 import cors from 'cors';
-import { animeRoutes, apiRoutes, firebaseRoutes } from '../server/routes';
+import { animeRoutes, apiRoutes, firebaseRoutes } from '../server/routes/index';
 
 const app = express();
 
