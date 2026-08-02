@@ -1,3 +1,3 @@
-export * from "./api.route";
-export * from "./firebase.route";
-export * from "./anime.route";
+export * from "./api.route.js";
+export * from "./firebase.route.js";
+export * from "./anime.route.js";

@@ -1,7 +1,7 @@
 
 import { getApps, initializeApp } from "firebase-admin/app";
 import { Firestore, getFirestore } from "firebase-admin/firestore";
-import { db } from "./config.model";
+import { db } from "./config.model.js";
 
 let appInstance: ReturnType<typeof initializeApp> | null = null;
 let dbInstance: Firestore | null = null;

@@ -1,4 +1,4 @@
-import { db } from "./config.model";
+import { db } from "./config.model.js";
 
 export async function fetchAllAnimes(): Promise<any[]> {
   if (!db) {

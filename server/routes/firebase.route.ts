@@ -1,5 +1,5 @@
 import { Express } from "express";
-import { getFirebaseStatus } from "../model";
+import { getFirebaseStatus } from "../model/index.js";
 
 export async function firebaseRoutes(app: Express) {
     // Firebase status API
