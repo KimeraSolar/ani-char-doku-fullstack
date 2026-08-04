@@ -572,6 +572,12 @@ export default function DatabaseView({
     setPageInputVal(String(validCurrentPage));
   }, [validCurrentPage]);
 
+  useEffect(() => {
+    if (isBatchEditMode) {
+      setGroupVariations(false);
+    }
+  }, [isBatchEditMode]);
+
   const handleCustomPageSubmit = () => {
     const parsed = parseInt(pageInputVal, 10);
     if (!isNaN(parsed) && parsed >= 1 && parsed <= totalPages) {
@@ -647,6 +653,7 @@ export default function DatabaseView({
         <div className="flex flex-wrap gap-2">
           {/* Group Variations Toggle */}
           <button
+            disabled={isBatchEditMode}
             onClick={() => setGroupVariations(!groupVariations)}
             className={`inline-flex items-center gap-1.5 rounded-xl border px-3.5 py-2 text-xs font-bold transition-all cursor-pointer ${
               groupVariations
