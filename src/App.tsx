@@ -6,14 +6,16 @@ import { Ban } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { AdminProtectedRoute, BrowsePageRedirect, OwnerProtectedRoute, ProtectedRoute } from "./components/Router";
 import { AdminUsersView, AnimeGrid, CharacterGrid, DatabaseView, Header, LoginModal, ProfilePage, RegisterForm, SudokuGame, TraitsConfigView } from "./components";
+import { TraitsPage } from "./pages";
+import { AppProvider, useApp } from "./context/AppContext";
 
 function AppContent() {
   const [dbCharacters, setDbCharacters] = useState<RegisteredCharacter[]>([]);
   const [dbAnimes, setDbAnimes] = useState<any[]>([]);
-  const [traitsCount, setTraitsCount] = useState(0);
   const [dbLoading, setDbLoading] = useState(true);
   const [firebaseStatus, setFirebaseStatus] = useState<{ isConfigured: boolean; usingFallback: boolean; error?: string } | null>(null);
-  
+  const { traitsCount, updateTraitsCount } = useApp();
+
   const { user, isBanned } = useAuth();
   const navigate = useNavigate();
 
@@ -43,7 +45,7 @@ function AppContent() {
       const traitsRes = await fetch("/api/traits/count");
       if (traitsRes.ok) {
         const traitsData = await traitsRes.json();
-        setTraitsCount(traitsData.count);
+        updateTraitsCount(traitsData.count);
       }
     } catch (err) {
       console.error("Failed to load local db:", err);
@@ -75,7 +77,7 @@ function AppContent() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-200 selection:bg-indigo-600/30 selection:text-indigo-200">
-      
+
       {/* Login Modal */}
       <LoginModal />
 
@@ -96,10 +98,10 @@ function AppContent() {
 
       {/* Main Container viewport */}
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        
+
         <AnimatePresence mode="wait">
           <Routes>
-            
+
             {/* Database Views (Accessible to all logged-in users) */}
             <Route
               path="/database"
@@ -247,11 +249,7 @@ function AppContent() {
                     exit={{ opacity: 0, y: -8 }}
                     transition={{ duration: 0.2 }}
                   >
-                    <TraitsConfigView
-                      characters={dbCharacters}
-                      onRefreshCharacters={fetchDatabase}
-                      firebaseStatus={firebaseStatus}
-                    />
+                    <TraitsPage />
                   </motion.div>
                 </AdminProtectedRoute>
               }
@@ -395,7 +393,9 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <AppContent />
+        <AppProvider>
+          <AppContent />
+        </AppProvider>
       </AuthProvider>
     </BrowserRouter>
   );

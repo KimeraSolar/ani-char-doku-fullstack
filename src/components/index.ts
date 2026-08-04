@@ -12,3 +12,4 @@ export { default as Router } from "./Router";
 export { default as SudokuGame } from "./SudokuGame";
 export { default as TraitsConfigView } from "./TraitsConfigView";
 export { default as TraitsForm } from "./TraitsForm";
+export { default as TraitCard } from "./TraitCard";

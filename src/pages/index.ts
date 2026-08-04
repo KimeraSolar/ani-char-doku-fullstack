@@ -1,0 +1,1 @@
+export { default as TraitsPage } from "./Traits.page";
