@@ -2,12 +2,13 @@ import { useEffect, useState } from "react";
 import { useApp } from "../context"
 import { Trait } from "@shared/types";
 import { Loader2, Plus, RefreshCw } from "lucide-react";
-import { TraitCard } from "../components";
+import { AddTraitForm, TraitCard } from "../components";
 
 export default function TraitsPage() {
-    const { traitsCount } = useApp();
+    const { traitsCount, updateTraitsCount } = useApp();
     const [traits, setTraits] = useState<Trait[]>([]);
     const [loading, setLoading] = useState<Boolean>(true);
+    const [showNewTraitForm, setShowNewTraitForm] = useState<boolean>(false);
 
     async function getAllTraits() {
         setLoading(true);
@@ -21,10 +22,45 @@ export default function TraitsPage() {
             const json = await res.json();
             const traits: Trait[] = json.traits
             setTraits(traits);
+            updateTraitsCount(traits.length);
         } catch (err) {
             console.error("Error fetching traits from database:", err);
         } finally {
             setLoading(false);
+        }
+    }
+
+    function openNewTraitForm() {
+        setShowNewTraitForm(true);
+    }
+
+    function closeNewTraitForm() {
+        setShowNewTraitForm(false);
+    }
+
+    async function registerNewTrait(newTrait: Trait): Promise<boolean> {
+        try {
+            const res = await fetch("/api/traits", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(newTrait)
+            });
+            if (!res.ok) throw new Error("Failed to add new Trait.");
+            const json = await res.json();
+            const savedTrait: Trait = json.savedTrait;
+
+            const updatedTraits = [
+                savedTrait,
+                ...traits
+            ];
+            setTraits(updatedTraits);
+            updateTraitsCount(updatedTraits.length);
+            return true;
+        } catch (err) {
+            console.error("Error registering new trait:", err);
+            return false;
         }
     }
 
@@ -53,7 +89,7 @@ export default function TraitsPage() {
                 {/* Global Toolbar */}
                 <div className="flex flex-wrap gap-2">
                     <button
-                        onClick={() => { }}
+                        onClick={openNewTraitForm}
                         className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2.5 text-xs font-extrabold text-white transition-all hover:bg-indigo-500 shadow-md shadow-indigo-600/20 cursor-pointer"
                     >
                         <Plus className="h-4 w-4" />
@@ -69,6 +105,9 @@ export default function TraitsPage() {
                     </button>
                 </div>
             </div>
+
+            {/* Add New Trait form */}
+            {showNewTraitForm && (<AddTraitForm onCancel={closeNewTraitForm} onSubmit={registerNewTrait} />)}
 
             {/* Traits view */}
             {loading ? (

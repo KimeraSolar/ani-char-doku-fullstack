@@ -1,5 +1,6 @@
 import { Express } from "express";
 import { fetchAllTraits, fetchTraitsCount } from "../model/index.js";
+import { registerNewTrait } from "server/controller/traits.controller.js";
 
 export async function traitRoutes(app: Express) {
     app.get("/api/traits/count", async (_, res) => {
@@ -22,29 +23,19 @@ export async function traitRoutes(app: Express) {
         }
     });
 
-    // app.get("/api/traits/count", async (req, res) => {
-    //     try {
-    //         const traits = await fetchAllTraits();
-    //         res.json({ count: Object.keys(traits).length });
-    //     } catch (err) {
-    //         console.error("Failed to read traits database:", err);
-    //         res.status(500).json({ error: "Failed to read traits database." });
-    //     }
-    // });
-
-    // app.post("/api/traits", async (req, res) => {
-    //     try {
-    //         const updatedTraits = req.body;
-    //         if (!updatedTraits || typeof updatedTraits !== "object" || Array.isArray(updatedTraits)) {
-    //             return res.status(400).json({ error: "Invalid traits data object layout." });
-    //         }
-    //         await saveTraitsRecord(updatedTraits);
-    //         res.json({ success: true, traits: updatedTraits });
-    //     } catch (err) {
-    //         console.error("Failed to save traits database:", err);
-    //         res.status(500).json({ error: "Failed to save traits database." });
-    //     }
-    // });
+    app.post("/api/traits", async (req, res) => {
+        try {
+            const newTrait = req.body;
+            if (!newTrait || typeof newTrait !== "object" || Array.isArray(newTrait)) {
+                return res.status(400).json({ error: "Invalid traits data object layout." });
+            }
+            const savedTrait = await registerNewTrait(newTrait);
+            res.status(201).json({ success: true, savedTrait });
+        } catch (err) {
+            console.error("[Traits Route] Failed to save trait to database:", err);
+            res.status(500).json({ error: "Failed to save trait to database." });
+        }
+    });  
 
     // app.post("/api/traits/delete", async (req, res) => {
     //     try {

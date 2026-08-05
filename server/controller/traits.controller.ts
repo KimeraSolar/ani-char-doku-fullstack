@@ -1,5 +1,5 @@
 import { Trait } from "@shared/types/trait.types.js";
-import { fetchAllTraits, fetchTraitsCount } from "../model/index.js";
+import { createTrait, fetchAllTraits, fetchTraitsCount } from "../model/index.js";
 
 export async function getRegisteredTraitsCount(): Promise<number | null> {
     try {
@@ -20,5 +20,15 @@ export async function getRegisteredTraits(): Promise<Trait[] | null> {
     } catch (err) {
         console.error("[Traits Controller] Error fetch registered traits:", err);
         return null;
+    }
+}
+
+export async function registerNewTrait(newTrait: Trait): Promise<Trait> {
+    try {
+        const savedTrait = await createTrait(newTrait);
+        return savedTrait;
+    } catch (err) {
+        console.error("[Traits Controller] Error registering new trait:", err);
+        return newTrait;
     }
 }

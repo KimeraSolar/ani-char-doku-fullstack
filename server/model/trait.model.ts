@@ -1,5 +1,4 @@
-import { Trait, TraitOption } from "@shared/types/index.js";
-import { getFirestoreDb } from "./firebase.model.js";
+import { Trait } from "@shared/types/index.js";
 import { getMongoClient } from "./mongodb.model.js";
 
 const TRAIT_COL_NAME = "traits";
@@ -61,7 +60,7 @@ export async function fetchAllTraits(): Promise<Array<Trait>> {
     const db = client.db(DATABASE_NAME);
     const traitsCollection = db.collection(TRAIT_COL_NAME);
     
-    const docs = await traitsCollection.find({}).toArray();
+    const docs = await traitsCollection.find({}).sort("name").toArray();
     const traits: Array<Trait> = docs.map(doc => (
       {
         id: doc._id.toString(),
@@ -77,38 +76,28 @@ export async function fetchAllTraits(): Promise<Array<Trait>> {
   }
 }
 
-// export async function saveTraitsRecord(updatedTraits: Record<string, TraitOption[]>): Promise<void> {
-//   const db = getFirestoreDb();
-//   if (!db) {
-//     console.error("Firestore is not initialized. Cannot save traits record.");
-//     return;
-//   }
+export async function createTrait(newTrait: Trait): Promise<Trait> {
+  const client = await getMongoClient();
+  if (!client) {
+    throw new Error("MongoDB is not initialized. Cannot fetch traits.");
+  }
 
-//   // Get current traits in Firestore
-//   const snapshot = await db.collection("traits").get();
-//   const existingKeys: string[] = [];
-//   snapshot.forEach((docSnap) => {
-//     existingKeys.push(docSnap.id);
-//   });
+  try {
+    const db = client.db(DATABASE_NAME);
+    const traitsCollection = db.collection(TRAIT_COL_NAME);
 
-//   const batch = db.batch();
+    const {id, ...traitToSave} = newTrait;
 
-//   // Set updated traits
-//   for (const [key, values] of Object.entries(updatedTraits)) {
-//     const docRef = db.collection("traits").doc(key);
-//     batch.set(docRef, { values });
-//   }
-
-//   // Delete decommissioned traits
-//   for (const oldKey of existingKeys) {
-//     if (updatedTraits[oldKey] === undefined) {
-//       const docRef = db.collection("traits").doc(oldKey);
-//       batch.delete(docRef);
-//     }
-//   }
-
-//   await batch.commit();
-// }
+    const savedTrait = await traitsCollection.insertOne(traitToSave);
+    return {
+      id: savedTrait.insertedId.toHexString(),
+      ...traitToSave
+    }
+  } catch (err) {
+    console.error("[Traits Model] MongoDB write error for traits:", err);
+    return newTrait;
+  }
+}
 
 // export async function removeTraitAndCleanCharacters(key: string): Promise<Record<string, TraitOption[]>> {
 //   const db = getFirestoreDb();

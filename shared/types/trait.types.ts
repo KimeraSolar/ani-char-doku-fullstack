@@ -8,7 +8,7 @@ export interface TraitDefinition {
   placeholder?: string;
 }
 
-interface TraitValue {
+export interface TraitValue {
   key: string;
   name: string;
   description?: string;
