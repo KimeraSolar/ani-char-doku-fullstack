@@ -682,13 +682,11 @@ export default function SudokuGame({ characters, animes = [], onRefreshCharacter
   const [shareCopied, setShareCopied] = useState(false);
 
   // Point-based scoring system state
-  const [scorePoints, setScorePoints] = useState<number>(0);
   const [usedCharacterIds, setUsedCharacterIds] = useState<string[]>([]);
   const [gameMode, setGameMode] = useState<"none" | "trait_scoring" | "same_trait" | "multiverse">("none");
 
   // Reset points and used characters when a new board is generated or loaded.
   useEffect(() => {
-    setScorePoints(0);
     setUsedCharacterIds([]);
     setShowScoringRules(false);
   }, [board]);
@@ -706,7 +704,6 @@ export default function SudokuGame({ characters, animes = [], onRefreshCharacter
     setHintText(null);
     setShowJokerTraits(false);
     setShowScoringRules(false);
-    setScorePoints(0);
     setUsedCharacterIds([]);
   };
 
@@ -1019,7 +1016,6 @@ export default function SudokuGame({ characters, animes = [], onRefreshCharacter
   // Automatically recalculate base score points and used character IDs whenever selectedCells, board, or gameMode changes
   useEffect(() => {
     if (!board) {
-      setScorePoints(0);
       setUsedCharacterIds([]);
       return;
     }
@@ -1046,9 +1042,30 @@ export default function SudokuGame({ characters, animes = [], onRefreshCharacter
       }
     }
 
-    setScorePoints(calculatedPoints);
     setUsedCharacterIds(usedIds);
   }, [board, selectedCells, gameMode, sameTraitBonus, animes, isDailyPuzzleMode, isDailyCompletedForUser]);
+
+  const calculateBaseScorePoints = (selectedCells: Record<number, RegisteredCharacter | null>, board: SudokuBoard) => {
+    let calculatedPoints = 0;
+    const usedIds: string[] = [];
+
+    for (let idx = 0; idx < 9; idx++) {
+      const char = selectedCells[idx];
+      if (char) {
+        const hasConflict = gameMode === "multiverse" && hasSourceConflictOnBoard(char, idx, selectedCells);
+        const isJoker = board.jokerId === char.id && !hasConflict;
+        const isCompat = isCompatibleWithCell(char, idx);
+
+        if ((isCompat || isJoker) && !usedIds.includes(char.id)) {
+          const pointsToGrant = isJoker ? 200 : 100;
+          calculatedPoints += pointsToGrant;
+          usedIds.push(char.id);
+        }
+      }
+    }
+
+    return calculatedPoints;
+  }
 
   // Generate Sudoku board matching database constraints
   const generateNewSudoku = () => {
@@ -2273,6 +2290,12 @@ export default function SudokuGame({ characters, animes = [], onRefreshCharacter
   // Calculate already found traits of the Joker character
   const gridChars = Object.values(selectedCells).filter(Boolean) as RegisteredCharacter[];
 
+  const scorePoints = useMemo(() => {
+    if (!board) return 0;
+    // Insira aqui a lógica/função de cálculo da pontuação base do tabuleiro
+    return calculateBaseScorePoints(selectedCells, board); 
+  }, [selectedCells, board]);
+
   const foundJokerTraits = useMemo(() => {
     if (!jokerChar || !board) return [];
 
@@ -2538,7 +2561,7 @@ export default function SudokuGame({ characters, animes = [], onRefreshCharacter
         }
       }
     }
-  }, [isComplete, user, board, displayPoints, score, gameMode, gridChars, jokerChar]);
+  }, [user, board, displayPoints, score, gameMode, gridChars, jokerChar]);
 
   // Filter available characters based on search query inside the modal (only starts searching when >= 3 chars)
   const alreadySelectedIds = (Object.values(selectedCells).filter(Boolean) as RegisteredCharacter[]).map(c => c.id);
