@@ -64,6 +64,29 @@ export default function TraitsPage() {
         }
     }
 
+    async function deleteTrait(trait: Trait): Promise<boolean> {
+        try {
+            const res = await fetch("/api/traits", {
+                method: "DELETE",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(trait)
+            });
+            if (!res.ok) throw new Error("Failed to delete Trait.");
+            const json = await res.json();
+            const deletedTrait: Trait = json.deletedTrait;
+
+            const updatedTraits = traits.filter(trait => trait.id !== deletedTrait.id);
+            setTraits(updatedTraits);
+            updateTraitsCount(updatedTraits.length);
+            return true;
+        } catch (err) {
+            console.error("Error deleting trait:", err);
+            return false;
+        }
+    }
+
     useEffect(() => {
         if (!traits.length) {
             getAllTraits();
@@ -120,7 +143,7 @@ export default function TraitsPage() {
                     <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                         {traits.map((trait) => {
                             return (
-                                <TraitCard trait={trait} />
+                                <TraitCard trait={trait} onDelete={deleteTrait} />
                             );
                         })}
                     </div>

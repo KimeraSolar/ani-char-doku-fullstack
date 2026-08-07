@@ -1,6 +1,6 @@
 import { Express } from "express";
 import { fetchAllTraits, fetchTraitsCount } from "../model/index.js";
-import { registerNewTrait } from "server/controller/traits.controller.js";
+import { deleteRegisteredTrait, registerNewTrait } from "server/controller/traits.controller.js";
 
 export async function traitRoutes(app: Express) {
     app.get("/api/traits/count", async (_, res) => {
@@ -27,7 +27,7 @@ export async function traitRoutes(app: Express) {
         try {
             const newTrait = req.body;
             if (!newTrait || typeof newTrait !== "object" || Array.isArray(newTrait)) {
-                return res.status(400).json({ error: "Invalid traits data object layout." });
+                return res.status(400).json({ error: "Invalid trait data object layout." });
             }
             const savedTrait = await registerNewTrait(newTrait);
             res.status(201).json({ success: true, savedTrait });
@@ -35,21 +35,22 @@ export async function traitRoutes(app: Express) {
             console.error("[Traits Route] Failed to save trait to database:", err);
             res.status(500).json({ error: "Failed to save trait to database." });
         }
-    });  
-
-    // app.post("/api/traits/delete", async (req, res) => {
-    //     try {
-    //         const { key } = req.body;
-    //         if (!key) {
-    //             return res.status(400).json({ error: "Key is required to delete a trait." });
-    //         }
-    //         const traits = await removeTraitAndCleanCharacters(key);
-    //         res.json({ success: true, traits });
-    //     } catch (err) {
-    //         console.error("Failed to delete trait:", err);
-    //         res.status(500).json({ error: "Failed to delete trait from database system." });
-    //     }
-    // });
+    });
+    
+    app.delete("/api/traits", async (req, res) => {
+        try {
+            const trait = req.body;
+            if (!trait || typeof trait !== "object" || Array.isArray(trait)) {
+                return res.status(400).json({ error: "Invalid trait data object layout." });
+            }
+            const deletedTrait = await deleteRegisteredTrait(trait);
+            if (!deletedTrait) throw new Error();
+            res.status(200).json({ success: true, deletedTrait });
+        } catch (err) {
+            console.error("[Traits Route] Failed to delete trait from database:", err);
+            res.status(500).json({ error: "Failed to delete trait from database." });
+        }
+    });
 
     // app.post("/api/traits/rename", async (req, res) => {
     //     try {

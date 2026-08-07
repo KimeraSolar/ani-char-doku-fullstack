@@ -18,3 +18,8 @@ export function toSlug(text: string): string {
     .trim()
     .replace(/[\s-]+/g, "_");
 }
+
+export function throwErrorResponse(errorMessage: string, error?: any) {
+    console.error(errorMessage, error || "");
+    throw new Error(errorMessage);
+}

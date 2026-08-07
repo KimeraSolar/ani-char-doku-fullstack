@@ -1,46 +1,17 @@
+import { ObjectId } from "mongodb";
 import { Trait } from "@shared/types/index.js";
-import { getMongoClient } from "./mongodb.model.js";
+import { getDBCollection } from "./mongodb.model.js";
+import { throwErrorResponse } from "@shared/utils/index.js";
 
 const TRAIT_COL_NAME = "traits";
-const DATABASE_NAME = process.env.MONGODB_DATABASE;
-
-// export async function fetchAllTraits(): Promise<Record<string, TraitOption[]>> {
-//   const db = getFirestoreDb();
-//   if (!db) {
-//     console.log("Firestore is not initialized. Cannot fetch traits.");
-//     return {};
-//   }
-
-//   try {
-//     const snapshot = await db.collection("traits").get();
-//     const traits: Record<string, TraitOption[]> = {};
-//     snapshot.forEach((docSnap) => {
-//       const data = docSnap.data();
-//       const rawValues = data.values || [];
-//       traits[docSnap.id] = rawValues.map((v: any) => {
-//         return {
-//           name: v.name || "",
-//           description: v.description || "",
-//         };
-//       });
-//     });
-//     return traits;
-//   } catch (err) {
-//     console.error("Firestore read error for traits:", err);
-//     return {};
-//   }
-// }
 
 export async function fetchTraitsCount(): Promise<number> {
-  const client = await getMongoClient();
-  if (!client) {
-    throw new Error("MongoDB is not initialized. Cannot fetch traits");
+  const traitsCollection = await getDBCollection(TRAIT_COL_NAME);
+  if (!traitsCollection) {
+    throw new Error("MongoDB error. Cannot fetch traits count.");
   }
 
   try {
-    const db = client.db(DATABASE_NAME);
-    const traitsCollection = db.collection(TRAIT_COL_NAME);
-
     const docsCount = traitsCollection.countDocuments();
 
     return docsCount;
@@ -51,15 +22,12 @@ export async function fetchTraitsCount(): Promise<number> {
 }
 
 export async function fetchAllTraits(): Promise<Array<Trait>> {
-  const client = await getMongoClient();
-  if (!client) {
-    throw new Error("MongoDB is not initialized. Cannot fetch traits.");
+  const traitsCollection = await getDBCollection(TRAIT_COL_NAME);
+  if (!traitsCollection) {
+    throw new Error("MongoDB error. Cannot fetch traits.");
   }
 
   try {
-    const db = client.db(DATABASE_NAME);
-    const traitsCollection = db.collection(TRAIT_COL_NAME);
-    
     const docs = await traitsCollection.find({}).sort("name").toArray();
     const traits: Array<Trait> = docs.map(doc => (
       {
@@ -77,17 +45,13 @@ export async function fetchAllTraits(): Promise<Array<Trait>> {
 }
 
 export async function createTrait(newTrait: Trait): Promise<Trait> {
-  const client = await getMongoClient();
-  if (!client) {
-    throw new Error("MongoDB is not initialized. Cannot fetch traits.");
+  const traitsCollection = await getDBCollection(TRAIT_COL_NAME);
+  if (!traitsCollection) {
+    throw new Error("MongoDB error. Cannot create trait.");
   }
 
   try {
-    const db = client.db(DATABASE_NAME);
-    const traitsCollection = db.collection(TRAIT_COL_NAME);
-
     const {id, ...traitToSave} = newTrait;
-
     const savedTrait = await traitsCollection.insertOne(traitToSave);
     return {
       id: savedTrait.insertedId.toHexString(),
@@ -96,6 +60,29 @@ export async function createTrait(newTrait: Trait): Promise<Trait> {
   } catch (err) {
     console.error("[Traits Model] MongoDB write error for traits:", err);
     return newTrait;
+  }
+}
+
+export async function deleteTrait(trait: Trait): Promise<Trait | null> {
+  const traitsCollection = await getDBCollection(TRAIT_COL_NAME);
+  if (!traitsCollection) {
+    throw new Error("MongoDB error. Cannot delete trait.");
+  }
+
+  try {
+    const result = await traitsCollection.findOneAndDelete({ _id: new ObjectId(trait.id) });
+    if (result) {
+      const deletedTrait: Trait = {
+        id: result._id.toHexString(),
+        name: result.name,
+        values: result.values  
+      };
+      return deletedTrait;
+    }
+    throw new Error("Unable to find and delete trait.");
+  } catch (err) {
+    throwErrorResponse("[Traits Model] MongoDB write error for traits:", err);
+    return null;
   }
 }
 

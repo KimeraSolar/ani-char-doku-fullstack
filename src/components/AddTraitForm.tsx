@@ -123,6 +123,7 @@ export default function AddTraitForm({ onCancel, onSubmit }: AddTraitFormProps) 
             animate={{ opacity: 1, height: "auto" }}
             className="rounded-2xl border border-slate-850 bg-slate-900/40 p-6 space-y-4 shadow-xl overflow-hidden"
         >
+            {/* Form Header */}
             <div className="flex items-center justify-between">
                 <h3 className="text-sm font-black text-white font-sans flex items-center gap-1.5">
                     <span>Register New Trait</span>
@@ -135,6 +136,7 @@ export default function AddTraitForm({ onCancel, onSubmit }: AddTraitFormProps) 
                 </button>
             </div>
 
+            {/* Form Body */}
             <div className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-1.5">
@@ -228,6 +230,7 @@ export default function AddTraitForm({ onCancel, onSubmit }: AddTraitFormProps) 
                 </div>
             </div>
 
+            {/* Form Error */}
             {formError && (
                 <p className="text-[11px] font-bold text-red-400 mt-2 flex items-center gap-1">
                     <AlertCircle className="h-3.5 w-3.5" />

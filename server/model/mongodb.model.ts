@@ -1,5 +1,6 @@
-import { MongoClient } from "mongodb";
+import { Collection, MongoClient } from "mongodb";
 
+const DATABASE_NAME = process.env.MONGODB_DATABASE;
 const uri = process.env.MONGODB_URI;
 const options = {};
 
@@ -33,4 +34,20 @@ export async function getMongoClient(): Promise<MongoClient | null> {
     console.error("Failed to connect to MongoDB:", error);
     return null;
   }
+}
+
+export async function getDBCollection(collectionName: string): Promise<Collection | null> {
+  const client = await getMongoClient();
+    if (!client) {
+      return null;
+    }
+    const db = client.db(DATABASE_NAME);
+    if (!db) {
+      return null;
+    }
+    const collection = db.collection(collectionName);
+    if (!collection) {
+      return null;
+    }
+    return collection;
 }
