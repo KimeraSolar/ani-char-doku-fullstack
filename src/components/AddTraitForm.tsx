@@ -2,7 +2,7 @@ import { Trait, TraitValue } from "@shared/types";
 import { toSlug } from "@shared/utils";
 import { AlertCircle, Loader2, Trash2, X } from "lucide-react";
 import { motion } from "motion/react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 interface AddTraitFormProps {
     onCancel: () => void;
@@ -15,6 +15,7 @@ export default function AddTraitForm({ onCancel, onSubmit }: AddTraitFormProps) 
     const [newValue, setNewValue] = useState<{ key?: string, name?: string, description?: string } | null>(null);
     const [formError, setFormError] = useState<string>("");
     const [submitting, setSubmitting] = useState<boolean>(false);
+    const listContainerRef = useRef<HTMLDivElement>(null);
 
     function clearForm() {
         setName("");
@@ -107,6 +108,15 @@ export default function AddTraitForm({ onCancel, onSubmit }: AddTraitFormProps) 
         setFormError("");
     }, [name, values, newValue]);
 
+    useEffect(() => {
+        if (listContainerRef.current) {
+            listContainerRef.current.scrollTo({
+                top: listContainerRef.current.scrollHeight,
+                behavior: 'smooth',
+            });
+        }
+    }, [values.length]);
+
     return (
         <motion.div
             initial={{ opacity: 0, height: 0 }}
@@ -144,7 +154,7 @@ export default function AddTraitForm({ onCancel, onSubmit }: AddTraitFormProps) 
                     <span className="text-[10px] font-bold text-slate-450 uppercase tracking-wider font-mono block">Trait Values ({values.length})</span>
 
                     {/* Option List Table */}
-                    <div className="rounded-xl border border-slate-850 bg-slate-950/40 p-1.5 max-h-48 overflow-y-auto space-y-2">
+                    <div ref={listContainerRef} className="rounded-xl border border-slate-850 bg-slate-950/40 p-1.5 max-h-48 overflow-y-auto space-y-2">
                         {values.length <= 0 && (<p className="text-xs text-slate-500 py-4 text-center italic font-semibold">No values added yet. Register values below.</p>)}
                         {values.length > 0 &&
                             values.map(value => (
@@ -205,7 +215,7 @@ export default function AddTraitForm({ onCancel, onSubmit }: AddTraitFormProps) 
                         className="rounded-xl bg-indigo-650 hover:bg-indigo-600 disabled:opacity-45 border border-indigo-500/20 px-5 py-2 text-xs font-black text-white transition-all cursor-pointer shadow-md"
                     >
                         {submitting ? (
-                            <div className="flex"><Loader2 className="h-4 w-4 animate-spin text-indigo-400 mr-2"/> Saving...</div>
+                            <div className="flex"><Loader2 className="h-4 w-4 animate-spin text-indigo-400 mr-2" /> Saving...</div>
                         ) : "Save Trait"}
                     </button>
                     <button
