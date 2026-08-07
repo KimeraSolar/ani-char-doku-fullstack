@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
-import { RegisteredCharacter, TraitOption, PuzzleHistoryRecord } from "@shared/types/index";
+import { RegisteredCharacter, TraitOption, PuzzleHistoryRecord, Anime } from "@shared/types/index";
 import PuzzleHistoryView from "./PuzzleHistoryView";
 import DailyLeaderboardView from "./DailyLeaderboardView";
 import { 
@@ -60,31 +60,8 @@ export function getAnimeForChar(char: RegisteredCharacter, animes: any[]): any |
   
   // Try using animeSources first
   if (Array.isArray((char as any).animeSources) && (char as any).animeSources.length > 0) {
-    for (const srcObj of (char as any).animeSources) {
-      const match = animes.find(a => Number(a.malId) === Number(srcObj.malId));
-      if (match) return match;
-    }
-  }
-  
-  // Try using character's source field
-  const charSourceId = (char as any).source;
-  if (charSourceId) {
-    const match = animes.find(a => Number(a.malId) === Number(charSourceId));
-    if (match) return match;
-  }
-  
-  // Try matching by title in sources list
-  if (Array.isArray(char.sources)) {
-    for (const src of char.sources) {
-      const matchByTitle = animes.find(a => String(a.title).toLowerCase() === String(src).toLowerCase());
-      if (matchByTitle) return matchByTitle;
-      
-      const mId = Number(src);
-      if (!isNaN(mId)) {
-        const matchById = animes.find(a => Number(a.malId) === mId);
-        if (matchById) return matchById;
-      }
-    }
+    const matches = (char as any).animeSources.map((animeSrc: any) => animes.find(a => Number(a.malId) === Number(animeSrc.malId))).filter(Boolean);
+    return matches;
   }
 
   return null;
@@ -92,6 +69,7 @@ export function getAnimeForChar(char: RegisteredCharacter, animes: any[]): any |
 
 export function getFixedTraitValue(char: RegisteredCharacter, traitKey: string, animes: any[] = []): string {
   if (!char) return "";
+  
   
   if (traitKey === "Name Starts With") {
     const firstName = char.name.trim().split(/\s+/)[0];
@@ -130,10 +108,10 @@ export function getFixedTraitValue(char: RegisteredCharacter, traitKey: string, 
   }
 
   if (traitKey === "Source Decade") {
-    const anime = getAnimeForChar(char, animes);
-    if (anime && anime.year) {
-      const decadeStart = Math.floor(anime.year / 10) * 10;
-      return `${decadeStart}s`;
+    const animeArray: any[] = getAnimeForChar(char, animes);
+    if (animeArray && animeArray.some(anime => anime.year)) {
+      const decadeStart = animeArray.map(anime => Math.floor(anime.year / 10) * 10);
+      return `${decadeStart[0]}`;
     }
     return "";
   }
@@ -154,12 +132,12 @@ export function isTraitDefinedForChar(char: RegisteredCharacter, key: string, an
   if (FIXED_TRAITS.includes(key)) {
     if (key.startsWith("Source")) {
       if (["Source Format", "Source Material", "Source Decade", "Source Genre"].includes(key)) {
-        const anime = getAnimeForChar(char, animes);
-        if (!anime) return false;
-        if (key === "Source Format") return !!anime.type;
-        if (key === "Source Material") return !!anime.source;
-        if (key === "Source Decade") return !!anime.year;
-        if (key === "Source Genre") return !!(Array.isArray(anime.genres) && anime.genres.length > 0);
+        const animeArray = getAnimeForChar(char, animes) as any[];
+        if (!animeArray) return false;
+        if (key === "Source Format") return animeArray.some(anime => !!anime.type);
+        if (key === "Source Material") return animeArray.some(anime => !!anime.source);
+        if (key === "Source Decade") return animeArray.some(anime => !!anime.year);
+        if (key === "Source Genre") return animeArray.some(anime => (Array.isArray(anime.genres) && anime.genres.length > 0));
       }
       return !!(char.sources && char.sources.length > 0);
     }
@@ -230,10 +208,10 @@ export function getAvailableValuesForTrait(char: RegisteredCharacter, key: strin
       return anime && anime.source ? [anime.source] : [""];
     }
     if (key === "Source Decade") {
-      const anime = getAnimeForChar(char, animes);
-      if (anime && anime.year) {
-        const decadeStart = Math.floor(anime.year / 10) * 10;
-        return [`${decadeStart}s`];
+      const anime: any[] = getAnimeForChar(char, animes);
+      if (anime && anime.some(anime => anime.year)) {
+        const decades = anime.map(anime => `${Math.floor(anime.year / 10) * 10}s`);
+        return [...new Set(decades)];
       }
       return [""];
     }
@@ -316,11 +294,10 @@ export function matchesTrait(char: RegisteredCharacter, traitKey: string, expect
       return false;
     }
     if (traitKey === "Source Decade") {
-      const anime = getAnimeForChar(char, animes);
-      if (anime && anime.year) {
-        const decadeStart = Math.floor(anime.year / 10) * 10;
-        const decadeStr = `${decadeStart}s`;
-        return decadeStr.toLowerCase() === trimmedExpected;
+      const animeArray: any[] = getAnimeForChar(char, animes);
+      if (animeArray && animeArray.some(anime => anime.year)) {
+        const decadeStarts = animeArray.map(anime => `${Math.floor(anime.year / 10) * 10}s`);
+        return decadeStarts.some(decade => decade === trimmedExpected);
       }
       return false;
     }
