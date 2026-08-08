@@ -13,10 +13,9 @@ export async function fetchTraitsCount(): Promise<number> {
 
   try {
     const docsCount = traitsCollection.countDocuments();
-
     return docsCount;
   } catch (err) {
-    console.error("[Traits Model] MongoDB read error for traits:", err);
+    throwErrorResponse("[Traits Model] MongoDB read error for traits:", err);
     return -1;
   }
 }
@@ -35,16 +34,15 @@ export async function fetchAllTraits(): Promise<Array<Trait>> {
         name: doc.name,
         values: doc.values
       }
-    ))
-
+    ));
     return traits;
   } catch (err) {
-    console.error("[Traits Model] MongoDB read error for traits:", err);
+    throwErrorResponse("[Traits Model] MongoDB read error for traits:", err);
     return [];
   }
 }
 
-export async function createTrait(newTrait: Trait): Promise<Trait> {
+export async function createTrait(newTrait: Trait): Promise<Trait | null> {
   const traitsCollection = await getDBCollection(TRAIT_COL_NAME);
   if (!traitsCollection) {
     throw new Error("MongoDB error. Cannot create trait.");
@@ -58,8 +56,8 @@ export async function createTrait(newTrait: Trait): Promise<Trait> {
       ...traitToSave
     }
   } catch (err) {
-    console.error("[Traits Model] MongoDB write error for traits:", err);
-    return newTrait;
+    throwErrorResponse("[Traits Model] MongoDB write error for traits:", err);
+    return null;
   }
 }
 

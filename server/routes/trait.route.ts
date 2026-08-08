@@ -9,17 +9,17 @@ export async function traitRoutes(app: Express) {
             res.status(200).json({ count: traitsCount });
         } catch (err) {
             console.error("[Traits Route] Failed to fetch traits count:", err);
-            res.status(500).json({ error: "Failed to fetch traits count."});
+            res.status(500).json({ error: `Failed to fetch traits count: ${err}`});
         }
     });
 
-    app.get("/api/traits", async (req, res) => {
+    app.get("/api/traits", async (_, res) => {
         try {
             const traits = await fetchAllTraits();
-            res.json({ traits });
+            res.status(200).json({ traits });
         } catch (err) {
             console.error("[Traits Route] Failed to fetch traits:", err);
-            res.status(500).json({ error: "Failed to fetch traits." });
+            res.status(500).json({ error: `Failed to fetch traits: ${err}` });
         }
     });
 
@@ -33,7 +33,7 @@ export async function traitRoutes(app: Express) {
             res.status(201).json({ success: true, savedTrait });
         } catch (err) {
             console.error("[Traits Route] Failed to save trait to database:", err);
-            res.status(500).json({ error: "Failed to save trait to database." });
+            res.status(500).json({ error: `Failed to save trait to database: ${err}` });
         }
     });
     

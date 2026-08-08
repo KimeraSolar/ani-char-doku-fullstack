@@ -5,22 +5,20 @@ import { throwErrorResponse } from "@shared/utils";
 export async function getRegisteredTraitsCount(): Promise<number | null> {
     try {
         const traitsCount = await fetchTraitsCount();
-        if (traitsCount < 0) throw new Error("Failed to fetch traits count.");
-
         return traitsCount;
     } catch (err) {
-        console.error("[Traits Controller] Error fetching registered traits count:", err);
+        throwErrorResponse("[Traits Controller] Error fetching registered traits count:", err);
         return null;
     }
 }
 
-export async function getRegisteredTraits(): Promise<Trait[] | null> {
+export async function getRegisteredTraits(): Promise<Trait[]> {
     try {
         const traits = await fetchAllTraits();
         return traits;
     } catch (err) {
-        console.error("[Traits Controller] Error fetch registered traits:", err);
-        return null;
+        throwErrorResponse("[Traits Controller] Error fetch registered traits:", err);
+        return [];
     }
 }
 
@@ -39,7 +37,7 @@ export async function deleteRegisteredTrait(trait: Trait): Promise<Trait | null>
         const deletedTrait = await deleteTrait(trait);
         return deletedTrait;
     } catch (err) {
-        console.error("[Traits Controller] Error deleting trait:", err);
+        throwErrorResponse("[Traits Controller] Error deleting trait:", err);
         return null;
     }
 }
