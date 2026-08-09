@@ -10,7 +10,6 @@ export { default as PuzzleHistoryView } from "./PuzzleHistoryView";
 export { default as RegisterForm } from "./RegisterForm";
 export { default as Router } from "./Router";
 export { default as SudokuGame } from "./SudokuGame";
-export { default as TraitsConfigView } from "./TraitsConfigView";
 export { default as TraitsForm } from "./TraitsForm";
 export { default as TraitCard } from "./TraitCard";
 export { default as AddTraitForm } from "./AddTraitForm";
