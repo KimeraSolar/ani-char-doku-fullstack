@@ -38,7 +38,7 @@ interface SudokuBoard {
 
 interface SudokuGameProps {
   characters: RegisteredCharacter[];
-  animes?: any[];
+  animes: any[];
   onRefreshCharacters: () => Promise<void>;
   onNavigateToBrowse: () => void;
 }
@@ -55,7 +55,7 @@ export const FIXED_TRAITS = [
   "Source Genre"
 ];
 
-export function getAnimeForChar(char: RegisteredCharacter, animes: any[]): any | null {
+export function getAnimesForChar(char: RegisteredCharacter, animes: any[]): any | null {
   if (!char || !animes || animes.length === 0) return null;
   
   // Try using animeSources first
@@ -67,72 +67,69 @@ export function getAnimeForChar(char: RegisteredCharacter, animes: any[]): any |
   return null;
 }
 
-export function getFixedTraitValue(char: RegisteredCharacter, traitKey: string, animes: any[] = []): string {
-  if (!char) return "";
+export function getFixedTraitValues(char: RegisteredCharacter, traitKey: string, animes: any[]): string[] {
+  if (!char) return [];
   
   
   if (traitKey === "Name Starts With") {
-    const firstName = char.name.trim().split(/\s+/)[0];
-    return firstName ? firstName.charAt(0).toUpperCase() : "";
+    const name = char.name.trim().split(/\s+/);
+    return name.map(namePart => namePart.charAt(0).toUpperCase()).filter(Boolean);
   }
   
   if (traitKey === "Name Word Count") {
     const words = char.name.trim().split(/\s+/).filter(Boolean);
-    return words.length % 2 === 1 ? "Odd" : "Even";
+    return words.length % 2 === 1 ? ["Odd"] : ["Even"];
   }
   
   if (traitKey === "Last Name") {
     const words = char.name.trim().split(/\s+/).filter(Boolean);
-    return words.length > 1 ? "Has Last Name" : "No Last Name";
+    return words.length > 1 ? ["Has Last Name"] : ["No Last Name"];
   }
   
   if (traitKey === "Source Starts With") {
-    const sourceName = char.sources && char.sources.length > 0 ? char.sources[0].trim() : "";
-    return sourceName ? sourceName.charAt(0).toUpperCase() : "";
+    const sourceName = char.sources && char.sources.length > 0 ? char.sources.map(source => source.trim()) : [];
+    return sourceName.length > 0 ? Array.from(new Set(sourceName.map((source: string) => source.charAt(0).toUpperCase()))) : [];
   }
   
   if (traitKey === "Source Word Count") {
-    const sourceName = char.sources && char.sources.length > 0 ? char.sources[0].trim() : "";
-    const words = sourceName.split(/\s+/).filter(Boolean);
-    return words.length % 2 === 1 ? "Odd" : "Even";
+    const sourceName = char.sources && char.sources.length > 0 ? char.sources.map(source => source.trim()) : [];
+    const sourceWordsArray = sourceName.map(source => source.split(/\s+/).filter(Boolean));
+    return Array.from(new Set(sourceWordsArray.map(source => source.length % 2 === 1 ? "Odd" : "Even")));
   }
 
   if (traitKey === "Source Format") {
-    const anime = getAnimeForChar(char, animes);
-    return anime && anime.type ? anime.type : "";
+    const animesForChar : any[] = getAnimesForChar(char, animes);
+    const animeTypes = Array.from(new Set(animesForChar.map((anime: { type: any; }) => anime.type).filter(Boolean)));
+    return animeTypes;
   }
 
   if (traitKey === "Source Material") {
-    const anime = getAnimeForChar(char, animes);
-    return anime && anime.source ? anime.source : "";
+    const animesForChar : any[] = getAnimesForChar(char, animes);
+    const animeSources = Array.from(new Set(animesForChar.map((anime : { source: any; }) => anime.source).filter(Boolean)));
+    return animeSources;
   }
 
   if (traitKey === "Source Decade") {
-    const animeArray: any[] = getAnimeForChar(char, animes);
-    if (animeArray && animeArray.some(anime => anime.year)) {
-      const decadeStart = animeArray.map(anime => Math.floor(anime.year / 10) * 10);
-      return `${decadeStart[0]}`;
-    }
-    return "";
+    const animesForChar: any[] = getAnimesForChar(char, animes);
+    const animeYears = Array.from(new Set(animesForChar.map(anime => anime.year).filter(Boolean).map(year => `${Math.floor(year / 10) * 10}`)));
+    return animeYears;
   }
 
   if (traitKey === "Source Genre") {
-    const anime = getAnimeForChar(char, animes);
-    if (anime && Array.isArray(anime.genres) && anime.genres.length > 0) {
-      const genres = anime.genres.map((g: any) => typeof g === "string" ? g : (g.name || String(g))).filter(Boolean);
-      return genres.length > 0 ? genres[0] : "";
-    }
-    return "";
+    const animesForChar: any[] = getAnimesForChar(char, animes);
+    const animeGenres = animesForChar.map(anime => anime.genres).filter(genres => Array.isArray(genres) && genres.length > 0).flat(Infinity);
+    const genres = Array.from(new Set(animeGenres.map((g: any) => typeof g === "string" ? g : (g.name || String(g))).filter(Boolean)));
+    return genres;
   }
   
-  return "";
+  return [];
 }
 
 export function isTraitDefinedForChar(char: RegisteredCharacter, key: string, animes: any[] = []): boolean {
   if (FIXED_TRAITS.includes(key)) {
     if (key.startsWith("Source")) {
       if (["Source Format", "Source Material", "Source Decade", "Source Genre"].includes(key)) {
-        const animeArray = getAnimeForChar(char, animes) as any[];
+        const animeArray = getAnimesForChar(char, animes) as any[];
         if (!animeArray) return false;
         if (key === "Source Format") return animeArray.some(anime => !!anime.type);
         if (key === "Source Material") return animeArray.some(anime => !!anime.source);
@@ -150,9 +147,10 @@ export function isTraitDefinedForChar(char: RegisteredCharacter, key: string, an
   return String(val).trim() !== "";
 }
 
-export function getCharTraitValue(char: RegisteredCharacter, key: string, animes: any[] = []): string {
+export function getCharTraitValue(char: RegisteredCharacter, key: string, animes: any[]): string {
   if (FIXED_TRAITS.includes(key)) {
-    return getFixedTraitValue(char, key, animes);
+    const fixedTraits = getFixedTraitValues(char, key, animes);
+    return fixedTraits.length > 0 ? String(fixedTraits[Math.floor(Math.random() * fixedTraits.length)]) : "";
   }
   const val = char.traits?.[key];
   if (val === undefined || val === null) return "";
@@ -162,7 +160,7 @@ export function getCharTraitValue(char: RegisteredCharacter, key: string, animes
   return String(val);
 }
 
-export function getAvailableValuesForTrait(char: RegisteredCharacter, key: string, animes: any[] = []): string[] {
+export function getAvailableValuesForTrait(char: RegisteredCharacter, key: string, animes: any[]): string[] {
   if (!char) return [];
   
   if (FIXED_TRAITS.includes(key)) {
@@ -200,25 +198,28 @@ export function getAvailableValuesForTrait(char: RegisteredCharacter, key: strin
       return uniqueParities.length > 0 ? uniqueParities : [""];
     }
     if (key === "Source Format") {
-      const anime = getAnimeForChar(char, animes);
-      return anime && anime.type ? [anime.type] : [""];
+      const animesForChar : any[] = getAnimesForChar(char, animes);
+      const sourceTypes = Array.from(new Set(animesForChar.map(anime => anime.type).filter(Boolean)));
+      return sourceTypes.length > 0 ? sourceTypes : [""];
     }
     if (key === "Source Material") {
-      const anime = getAnimeForChar(char, animes);
-      return anime && anime.source ? [anime.source] : [""];
+      const animesForChar : any[] = getAnimesForChar(char, animes);
+      const sourceNames = Array.from(new Set(animesForChar.map(anime => anime.source).filter(Boolean)));
+      return sourceNames.length > 0 ? sourceNames : [""];
     }
     if (key === "Source Decade") {
-      const anime: any[] = getAnimeForChar(char, animes);
-      if (anime && anime.some(anime => anime.year)) {
-        const decades = anime.map(anime => `${Math.floor(anime.year / 10) * 10}s`);
+      const animesForChar: any[] = getAnimesForChar(char, animes);
+      if (animesForChar && animesForChar.some(anime => anime.year)) {
+        const decades = animesForChar.map(anime => `${Math.floor(anime.year / 10) * 10}s`);
         return [...new Set(decades)];
       }
       return [""];
     }
     if (key === "Source Genre") {
-      const anime = getAnimeForChar(char, animes);
-      if (anime && Array.isArray(anime.genres)) {
-        const genres = anime.genres.map((g: any) => typeof g === "string" ? g : (g.name || String(g))).filter(Boolean);
+      const animesForChar : any[] = getAnimesForChar(char, animes);
+      const sourceGenres = animesForChar.map(anime => anime.genres).filter(genres => Array.isArray(genres));
+      if (sourceGenres.length > 0) {
+        const genres =  Array.from(new Set(sourceGenres.flat(Infinity).filter(Boolean)));
         return genres.length > 0 ? genres : [""];
       }
       return [""];
@@ -241,7 +242,7 @@ export function getAvailableValuesForTrait(char: RegisteredCharacter, key: strin
 }
 
 // Check if a character has a specific trait
-export function matchesTrait(char: RegisteredCharacter, traitKey: string, expectedValue: string, animes: any[] = []): boolean {
+export function matchesTrait(char: RegisteredCharacter, traitKey: string, expectedValue: string, animes: any[]): boolean {
   if (!char) return false;
   
   const trimmedExpected = expectedValue.trim().toLowerCase();
@@ -256,12 +257,12 @@ export function matchesTrait(char: RegisteredCharacter, traitKey: string, expect
       });
     }
     if (traitKey === "Name Word Count") {
-      const val = getFixedTraitValue(char, "Name Word Count", animes);
-      return val.toLowerCase() === trimmedExpected;
+      const val = getFixedTraitValues(char, "Name Word Count", animes);
+      return val.some(trait => trait.toLowerCase() === trimmedExpected);
     }
     if (traitKey === "Last Name") {
-      const val = getFixedTraitValue(char, "Last Name", animes);
-      return val.toLowerCase() === trimmedExpected;
+      const val = getFixedTraitValues(char, "Last Name", animes);
+      return val.some(trait => trait.toLowerCase() === trimmedExpected);
     }
     if (traitKey === "Source Starts With") {
       if (!char.sources || char.sources.length === 0) return false;
@@ -280,34 +281,34 @@ export function matchesTrait(char: RegisteredCharacter, traitKey: string, expect
       });
     }
     if (traitKey === "Source Format") {
-      const anime = getAnimeForChar(char, animes);
-      if (anime && anime.type) {
-        return anime.type.trim().toLowerCase() === trimmedExpected;
+      const animesForChar : any[] = getAnimesForChar(char, animes);
+      const sourceTypes = animesForChar.map(anime => anime.type).filter(Boolean);
+      if (sourceTypes.length > 0) {
+        return sourceTypes.some(type => type.trim().toLowerCase() === trimmedExpected);
       }
       return false;
     }
     if (traitKey === "Source Material") {
-      const anime = getAnimeForChar(char, animes);
-      if (anime && anime.source) {
-        return anime.source.trim().toLowerCase() === trimmedExpected;
+      const animesForChar : any[] = getAnimesForChar(char, animes);
+      const sourceForChar = animesForChar.map(anime => anime.source).filter(Boolean);
+      if (sourceForChar.length > 0) {
+        return sourceForChar.some(source => source.trim().toLowerCase() === trimmedExpected);
       }
       return false;
     }
     if (traitKey === "Source Decade") {
-      const animeArray: any[] = getAnimeForChar(char, animes);
-      if (animeArray && animeArray.some(anime => anime.year)) {
-        const decadeStarts = animeArray.map(anime => `${Math.floor(anime.year / 10) * 10}s`);
+      const animesForChar: any[] = getAnimesForChar(char, animes);
+      if (animesForChar && animesForChar.some(anime => anime.year)) {
+        const decadeStarts = animesForChar.map(anime => `${Math.floor(anime.year / 10) * 10}s`);
         return decadeStarts.some(decade => decade === trimmedExpected);
       }
       return false;
     }
     if (traitKey === "Source Genre") {
-      const anime = getAnimeForChar(char, animes);
-      if (anime && Array.isArray(anime.genres)) {
-        return anime.genres.some((g: any) => {
-          const gName = typeof g === "string" ? g : (g.name || String(g));
-          return gName.trim().toLowerCase() === trimmedExpected;
-        });
+      const animesForChar : any[] = getAnimesForChar(char, animes);
+      const sourceGenres = animesForChar.map(anime => anime.genres).filter(genres => Array.isArray(genres)).flat(Infinity);
+      if (sourceGenres.length > 0) {
+        return sourceGenres.some(genre => genre.trim().toLowerCase() === trimmedExpected);
       }
       return false;
     }
@@ -438,7 +439,7 @@ export function validatePuzzleModes(
   bonusTrait: TraitRequirement | null | undefined,
   characters: RegisteredCharacter[],
   traits: Record<string, TraitOption[]> = {},
-  animes: any[] = []
+  animes: any[]
 ): ValidationResult {
   // 1. Classic Mode ("none")
   const classic = validatePuzzleWithChars(rowTraits, colTraits, characters, animes);
@@ -598,7 +599,7 @@ export function validatePuzzleModes(
   };
 }
 
-export default function SudokuGame({ characters, animes = [], onRefreshCharacters, onNavigateToBrowse }: SudokuGameProps) {
+export default function SudokuGame({ characters, animes, onRefreshCharacters, onNavigateToBrowse }: SudokuGameProps) {
   const { user, openLoginModal } = useAuth();
   const { code, dateParam } = useParams<{ code?: string; dateParam?: string }>();
   const navigate = useNavigate();
@@ -1330,8 +1331,8 @@ export default function SudokuGame({ characters, animes = [], onRefreshCharacter
           if (key === "Name Starts With" || key === "Source Starts With") {
             const setOfInitials = new Set<string>();
             characters.forEach(c => {
-              const val = getFixedTraitValue(c, key, animes);
-              if (val) setOfInitials.add(val);
+              const val = getFixedTraitValues(c, key, animes);
+              if (val.length > 0) val.forEach(trait => setOfInitials.add(trait));
             });
             possibleVals = Array.from(setOfInitials);
             if (possibleVals.length === 0) possibleVals = ["A"];
@@ -1342,32 +1343,32 @@ export default function SudokuGame({ characters, animes = [], onRefreshCharacter
           } else if (key === "Source Format") {
             const setOfFormats = new Set<string>();
             characters.forEach(c => {
-              const val = getFixedTraitValue(c, key, animes);
-              if (val) setOfFormats.add(val);
+              const val = getFixedTraitValues(c, key, animes);
+              if (val.length > 0) val.forEach(trait => setOfFormats.add(trait));
             });
             possibleVals = Array.from(setOfFormats);
             if (possibleVals.length === 0) possibleVals = ["TV"];
           } else if (key === "Source Material") {
             const setOfMaterials = new Set<string>();
             characters.forEach(c => {
-              const val = getFixedTraitValue(c, key, animes);
-              if (val) setOfMaterials.add(val);
+              const val = getFixedTraitValues(c, key, animes);
+              if (val.length > 0) val.forEach(trait => setOfMaterials.add(trait));
             });
             possibleVals = Array.from(setOfMaterials);
             if (possibleVals.length === 0) possibleVals = ["Manga"];
           } else if (key === "Source Decade") {
             const setOfDecades = new Set<string>();
             characters.forEach(c => {
-              const val = getFixedTraitValue(c, key, animes);
-              if (val) setOfDecades.add(val);
+              const val = getFixedTraitValues(c, key, animes);
+              if (val.length > 0) val.forEach(trait => setOfDecades.add(trait));
             });
             possibleVals = Array.from(setOfDecades);
             if (possibleVals.length === 0) possibleVals = ["2010s"];
           } else if (key === "Source Genre") {
             const setOfGenres = new Set<string>();
             characters.forEach(c => {
-              const val = getFixedTraitValue(c, key, animes);
-              if (val) setOfGenres.add(val);
+              const val = getFixedTraitValues(c, key, animes);
+              if (val.length > 0) val.forEach(trait => setOfGenres.add(trait));
             });
             possibleVals = Array.from(setOfGenres);
             if (possibleVals.length === 0) possibleVals = ["Action"];
@@ -2493,7 +2494,7 @@ export default function SudokuGame({ characters, animes = [], onRefreshCharacter
         .then(res => res.json())
         .then(data => {
           if (data.success) {
-            console.log("Puzzle completion history saved!", data.record);
+            console.info("Puzzle completion history saved!", data.record);
           }
         })
         .catch(err => {
@@ -4696,13 +4697,13 @@ export default function SudokuGame({ characters, animes = [], onRefreshCharacter
 
                       // Include FIXED_TRAITS dynamically if they are part of the cell criteria or bonus trait
                       if (rowT && FIXED_TRAITS.includes(rowT.key)) {
-                        traitEntries[rowT.key] = getFixedTraitValue(viewingCharacterDetail.char, rowT.key);
+                        traitEntries[rowT.key] = getFixedTraitValues(viewingCharacterDetail.char, rowT.key, animes);
                       }
                       if (colT && FIXED_TRAITS.includes(colT.key)) {
-                        traitEntries[colT.key] = getFixedTraitValue(viewingCharacterDetail.char, colT.key);
+                        traitEntries[colT.key] = getFixedTraitValues(viewingCharacterDetail.char, colT.key, animes);
                       }
                       if (gameMode === "same_trait" && sameTraitBonus && FIXED_TRAITS.includes(sameTraitBonus.key)) {
-                        traitEntries[sameTraitBonus.key] = getFixedTraitValue(viewingCharacterDetail.char, sameTraitBonus.key);
+                        traitEntries[sameTraitBonus.key] = getFixedTraitValues(viewingCharacterDetail.char, sameTraitBonus.key, animes);
                       }
 
                       const entries = Object.entries(traitEntries).sort(([a], [b]) => 
@@ -4727,15 +4728,15 @@ export default function SudokuGame({ characters, animes = [], onRefreshCharacter
                               let labelSuffix = "";
 
                               if (isRowTrait) {
-                                matches = matchesTrait(viewingCharacterDetail.char, rowT.key, rowT.value);
+                                matches = matchesTrait(viewingCharacterDetail.char, rowT.key, rowT.value, animes);
                                 expectedValue = rowT.value;
                                 labelSuffix = ` (Row Target: ${rowT.value})`;
                               } else if (isColTrait) {
-                                matches = matchesTrait(viewingCharacterDetail.char, colT.key, colT.value);
+                                matches = matchesTrait(viewingCharacterDetail.char, colT.key, colT.value, animes);
                                 expectedValue = colT.value;
                                 labelSuffix = ` (Col Target: ${colT.value})`;
                               } else if (isBonusTrait && sameTraitBonus) {
-                                matches = matchesTrait(viewingCharacterDetail.char, sameTraitBonus.key, sameTraitBonus.value);
+                                matches = matchesTrait(viewingCharacterDetail.char, sameTraitBonus.key, sameTraitBonus.value, animes);
                                 expectedValue = sameTraitBonus.value;
                                 labelSuffix = ` (Bonus Target: ${sameTraitBonus.value})`;
                               }
