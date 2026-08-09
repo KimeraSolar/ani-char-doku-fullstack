@@ -55,8 +55,8 @@ export const FIXED_TRAITS = [
   "Source Genre"
 ];
 
-export function getAnimesForChar(char: RegisteredCharacter, animes: any[]): any | null {
-  if (!char || !animes || animes.length === 0) return null;
+export function getAnimesForChar(char: RegisteredCharacter, animes: any[]): any {
+  if (!char || !animes || animes.length === 0) return [];
   
   // Try using animeSources first
   if (Array.isArray((char as any).animeSources) && (char as any).animeSources.length > 0) {
@@ -64,7 +64,7 @@ export function getAnimesForChar(char: RegisteredCharacter, animes: any[]): any 
     return matches;
   }
 
-  return null;
+  return [];
 }
 
 export function getFixedTraitValues(char: RegisteredCharacter, traitKey: string, animes: any[]): string[] {
