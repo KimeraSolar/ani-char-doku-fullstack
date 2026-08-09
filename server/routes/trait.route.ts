@@ -1,12 +1,11 @@
 import { Express } from "express";
-import { fetchAllTraits, fetchTraitsCount, updateTrait } from "../model/index.js";
-import { deleteRegisteredTrait, registerNewTrait } from "server/controller/traits.controller.js";
+import { getRegisteredTraitsCount, deleteRegisteredTrait, registerNewTrait, getRegisteredTraits, updateRegisteredTrait } from "server/controller/traits.controller.js";
 
 export async function traitRoutes(app: Express) {
     // Fetch Traits Count
     app.get("/api/traits/count", async (_, res) => {
         try {
-            const traitsCount = await fetchTraitsCount();
+            const traitsCount = await getRegisteredTraitsCount();
             res.status(200).json({ count: traitsCount });
         } catch (err) {
             console.error("[Traits Route] Failed to fetch traits count:", err);
@@ -17,7 +16,7 @@ export async function traitRoutes(app: Express) {
     // Fetch All Traits
     app.get("/api/traits", async (_, res) => {
         try {
-            const traits = await fetchAllTraits();
+            const traits = await getRegisteredTraits();
             res.status(200).json({ traits });
         } catch (err) {
             console.error("[Traits Route] Failed to fetch traits:", err);
@@ -67,51 +66,11 @@ export async function traitRoutes(app: Express) {
             if (!updatedTrait || typeof updatedTrait !== "object" || Array.isArray(updatedTrait)) {
                 return res.status(400).json({ error: "Invalid trait data object layout." });
             }
-            const savedUpdatedTrait = await updateTrait(updatedTrait);
+            const savedUpdatedTrait = await updateRegisteredTrait(updatedTrait);
             res.status(200).json({ success: true, savedUpdatedTrait });
         } catch (err) {
             console.error("[Traits Route] Failed to update trait in database:", err);
             res.status(500).json({ error: `Failed to update trait in database: ${err}` });
         }
     });
-    //     try {
-    //         const { oldKey, newKey } = req.body;
-    //         if (!oldKey || !newKey) {
-    //             return res.status(400).json({ error: "Both oldKey and newKey are required." });
-    //         }
-    //         const traits = await renameTraitKey(oldKey, newKey);
-    //         res.json({ success: true, traits });
-    //     } catch (err) {
-    //         console.error("Failed to rename trait key:", err);
-    //         res.status(500).json({ error: "Failed to rename trait key." });
-    //     }
-    // });
-
-    // app.post("/api/traits/update-definition", async (req, res) => {
-    //     try {
-    //         const { key, newKey, values } = req.body;
-    //         if (!key || !Array.isArray(values)) {
-    //             return res.status(400).json({ error: "Key and values array are required." });
-    //         }
-    //         const traits = await updateTraitDefinition(key, newKey, values);
-    //         res.json({ success: true, traits });
-    //     } catch (err) {
-    //         console.error("Failed to update trait definition:", err);
-    //         res.status(500).json({ error: "Failed to update trait configuration." });
-    //     }
-    // });
-
-    // app.post("/api/traits/add-value", async (req, res) => {
-    //     try {
-    //         const { key, value, description } = req.body;
-    //         if (!key || !value) {
-    //             return res.status(400).json({ error: "Key and value are required." });
-    //         }
-    //         const traits = await addTraitValue(key, value, description);
-    //         res.json({ success: true, traits });
-    //     } catch (err) {
-    //         console.error("Failed to append trait value:", err);
-    //         res.status(500).json({ error: "Failed to append trait value." });
-    //     }
-    // });
 }
