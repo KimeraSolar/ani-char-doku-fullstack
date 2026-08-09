@@ -19,7 +19,7 @@ export function toSlug(text: string): string {
     .replace(/[\s-]+/g, "_");
 }
 
-export function throwErrorResponse(errorMessage: string, error?: any) {
+export function throwErrorResponse(errorMessage: string, error?: any): void {
     console.error(errorMessage, error || "");
     throw new Error(errorMessage);
 }

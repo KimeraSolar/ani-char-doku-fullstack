@@ -1,8 +1,9 @@
 import { Express } from "express";
-import { fetchAllTraits, fetchTraitsCount } from "../model/index.js";
+import { fetchAllTraits, fetchTraitsCount, updateTrait } from "../model/index.js";
 import { deleteRegisteredTrait, registerNewTrait } from "server/controller/traits.controller.js";
 
 export async function traitRoutes(app: Express) {
+    // Fetch Traits Count
     app.get("/api/traits/count", async (_, res) => {
         try {
             const traitsCount = await fetchTraitsCount();
@@ -13,6 +14,7 @@ export async function traitRoutes(app: Express) {
         }
     });
 
+    // Fetch All Traits
     app.get("/api/traits", async (_, res) => {
         try {
             const traits = await fetchAllTraits();
@@ -23,6 +25,7 @@ export async function traitRoutes(app: Express) {
         }
     });
 
+    // Add New Trait
     app.post("/api/traits", async (req, res) => {
         try {
             const newTrait = req.body;
@@ -37,6 +40,7 @@ export async function traitRoutes(app: Express) {
         }
     });
     
+    // Delete Trait
     app.delete("/api/traits", async (req, res) => {
         try {
             const trait = req.body;
@@ -52,7 +56,24 @@ export async function traitRoutes(app: Express) {
         }
     });
 
-    // app.post("/api/traits/rename", async (req, res) => {
+    // Update Trait
+    app.post("/api/traits/:id", async (req, res) => {
+        try {
+            const traitId = req.params.id;
+            if (!traitId) {
+                return res.status(400).json({ error: "Invalid trait ID."});
+            }
+            const updatedTrait = req.body;
+            if (!updatedTrait || typeof updatedTrait !== "object" || Array.isArray(updatedTrait)) {
+                return res.status(400).json({ error: "Invalid trait data object layout." });
+            }
+            const savedUpdatedTrait = await updateTrait(updatedTrait);
+            res.status(200).json({ success: true, savedUpdatedTrait });
+        } catch (err) {
+            console.error("[Traits Route] Failed to update trait in database:", err);
+            res.status(500).json({ error: `Failed to update trait in database: ${err}` });
+        }
+    });
     //     try {
     //         const { oldKey, newKey } = req.body;
     //         if (!oldKey || !newKey) {

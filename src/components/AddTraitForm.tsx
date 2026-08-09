@@ -1,5 +1,6 @@
 import { Trait, TraitValue } from "@shared/types";
 import { toSlug } from "@shared/utils";
+import { traitValueKeyExists } from "@shared/utils/trait.utils";
 import { AlertCircle, Loader2, Trash2, X } from "lucide-react";
 import { motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
@@ -22,12 +23,6 @@ export default function AddTraitForm({ onCancel, onSubmit }: AddTraitFormProps) 
         setValues([]);
         setNewValue(null);
         setFormError("");
-    }
-
-    function valueKeyAlreadyExists(key: string): boolean {
-        const valueKey = values.find(value => value.key === key);
-        if (valueKey) return true;
-        return false;
     }
 
     function handleCancel() {
@@ -59,7 +54,7 @@ export default function AddTraitForm({ onCancel, onSubmit }: AddTraitFormProps) 
         if (!newValue?.name?.trim() || !newValue?.description?.trim()) {
             setFormError("Please fill both trait value's name and description to add it to the trait.");
         } else {
-            if (valueKeyAlreadyExists(newValue.key!)) {
+            if (traitValueKeyExists(newValue.key!, values)) {
                 setFormError("Cannot add a trait value with the same key as another already added trait value.");
             } else {
                 setFormError("");

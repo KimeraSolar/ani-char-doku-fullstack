@@ -2,15 +2,18 @@ import { Trait } from "@shared/types";
 import { Loader2, Pencil, Trash2 } from "lucide-react";
 import { motion } from "motion/react";
 import { useState } from "react";
+import EditTraitForm from "./EditTraitForm";
 
 interface TraitCardProps {
     trait: Trait;
     onDelete: (trait: Trait) => Promise<boolean>
+    onUpdate: (updatedTrait: Trait) => Promise<boolean>
 }
 
-export default function TraitCard({ trait, onDelete }: TraitCardProps) {
+export default function TraitCard({ trait, onDelete, onUpdate }: TraitCardProps) {
     const { id, name, values } = trait;
     const [showDeleteModal, setShowDeleteModal] = useState<boolean>(false);
+    const [showEditModal, setShowEditModal] = useState<boolean>(false);
 
     function handleOpenDeleteModal() {
         setShowDeleteModal(true);
@@ -23,6 +26,18 @@ export default function TraitCard({ trait, onDelete }: TraitCardProps) {
     async function handleDeleteTrait(trait: Trait) {
         const deleted = await onDelete(trait);
         return deleted;
+    }
+
+    function handleOpenEditModal() {
+        setShowEditModal(true);
+    }
+
+    function handleCloseEditModal() {
+        setShowEditModal(false);
+    }
+
+    async function handleUpdateTrait(updatedTrait: Trait): Promise<boolean> {
+        return onUpdate(updatedTrait);
     }
 
     return (
@@ -47,7 +62,7 @@ export default function TraitCard({ trait, onDelete }: TraitCardProps) {
                         </div>
 
                         <button
-                            onClick={() => { }}
+                            onClick={handleOpenEditModal}
                             className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-800 hover:text-slate-200 cursor-pointer"
                             title="Edit trait"
                         >
@@ -94,8 +109,21 @@ export default function TraitCard({ trait, onDelete }: TraitCardProps) {
             </div>
 
             {/* Delete Modal */}
-            { showDeleteModal && (
+            {showDeleteModal && (
                 <DeleteTraitModal trait={trait} onCancel={handleCloseDeleteModal} onConfirm={handleDeleteTrait} />
+            )}
+
+            {/* Edit Form Modal */}
+            {showEditModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 p-4 backdrop-blur-xs">
+                    <motion.div
+                        initial={{ scale: 0.95, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-950/40 p-6 space-y-5 shadow-2xl"
+                    >
+                        <EditTraitForm trait={trait} onCancel={handleCloseEditModal} onUpdate={handleUpdateTrait} />
+                    </motion.div>
+                </div>
             )}
         </div>
     );

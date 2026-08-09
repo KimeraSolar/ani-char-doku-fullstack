@@ -87,6 +87,29 @@ export default function TraitsPage() {
         }
     }
 
+    async function updateTrait(updatedTrait: Trait): Promise<boolean> {
+        try {
+            const res = await fetch(`/api/traits/${updatedTrait.id}`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(updatedTrait)
+            });
+            if (!res.ok) throw new Error("Failed to update Trait.");
+            const json = await res.json();
+            const savedUpdatedTrait: Trait = json.savedUpdatedTrait;
+
+            const updatedTraits = traits.map(trait => trait.id === savedUpdatedTrait.id ? savedUpdatedTrait : trait);
+            setTraits(updatedTraits);
+            updateTraitsCount(updatedTraits.length);
+            return true;
+        } catch (err) {
+            console.error("Error updating trait:", err);
+            return false;
+        }
+    }
+
     useEffect(() => {
         if (!traits.length) {
             getAllTraits();
@@ -143,7 +166,7 @@ export default function TraitsPage() {
                     <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                         {traits.map((trait) => {
                             return (
-                                <TraitCard trait={trait} onDelete={deleteTrait} />
+                                <TraitCard trait={trait} onDelete={deleteTrait} onUpdate={updateTrait} />
                             );
                         })}
                     </div>
