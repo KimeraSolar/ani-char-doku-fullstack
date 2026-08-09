@@ -1,4 +1,4 @@
-import { Collection, MongoClient } from "mongodb";
+import { ClientSession, Collection, MongoClient } from "mongodb";
 
 const DATABASE_NAME = process.env.MONGODB_DATABASE;
 const uri = process.env.MONGODB_URI;
@@ -50,4 +50,17 @@ export async function getDBCollection(collectionName: string): Promise<Collectio
       return null;
     }
     return collection;
+}
+
+export async function startSession(): Promise<ClientSession | null> {
+  const client = await getMongoClient();
+  if (!client) {
+    return null;
+  }
+  return client.startSession();
+}
+
+export async function endSession(session: ClientSession): Promise<boolean> {
+  await session.endSession();
+  return session.hasEnded;
 }

@@ -34,7 +34,6 @@ export async function registerNewTrait(newTrait: Trait): Promise<Trait | null> {
 
 export async function deleteRegisteredTrait(trait: Trait): Promise<Trait | null> {
     try {
-        // TODO: Delete trait from registered characters as well
         const deletedTrait = await deleteTrait(trait);
         return deletedTrait;
     } catch (err) {
@@ -45,7 +44,6 @@ export async function deleteRegisteredTrait(trait: Trait): Promise<Trait | null>
 
 export async function updateRegisteredTrait(trait: Trait): Promise<Trait | null> {
     try {
-        // TODO: Update trait in registered characters as well
         const updatedTrait = await updateTrait(trait);
         return updatedTrait;
     } catch (err) {

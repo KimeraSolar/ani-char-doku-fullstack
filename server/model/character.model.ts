@@ -1,5 +1,19 @@
 import { getFirestoreDb } from "./firebase.model.js";
 import { fetchAllAnimes, saveAnimeRecord } from "./anime.model.js";
+import { Trait } from "@shared/types/trait.types.js";
+import { ClientSession } from "mongodb";
+
+export async function deleteTraitFromCharacters(trait: Trait, session?: ClientSession): Promise<Boolean> {
+    // TODO: Delete trait from all registered characters
+    console.warn("[Characters Controller] Skipping: deleteTraitFromCharacters not implemented.");
+    return true;
+}
+
+export async function updateTraitOnCharacters(trait: Trait, session?: ClientSession): Promise<Boolean> {
+    // TODO: Update trait on all registered characters
+    console.warn("[Characters Controller] Skipping: updateTraitOnCharacters not implemented.");
+    return true;
+}
 
 export async function saveCharacterRecordDirect(char: any): Promise<void> {
   const db = getFirestoreDb();
