@@ -14,3 +14,4 @@ export { default as TraitsConfigView } from "./TraitsConfigView";
 export { default as TraitsForm } from "./TraitsForm";
 export { default as TraitCard } from "./TraitCard";
 export { default as AddTraitForm } from "./AddTraitForm";
+export { default as PopupModal } from "./PopupModal";

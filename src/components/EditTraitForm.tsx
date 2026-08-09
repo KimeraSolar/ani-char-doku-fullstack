@@ -3,8 +3,8 @@ import { toSlug } from "@shared/utils";
 import { traitValueKeyExists } from "@shared/utils/trait.utils";
 import { AlertCircle, Loader2, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { motion } from "motion/react";
-import lodash, { update } from "lodash";
+import lodash from "lodash";
+import PopupModal from "./PopupModal";
 
 interface EditTraitFormProps {
     trait: Trait;
@@ -267,9 +267,9 @@ export default function EditTraitForm({ trait, onCancel, onUpdate }: EditTraitFo
                     onClick={handleSaveTrait}
                     className="rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-45 px-4.5 py-1.5 text-xs font-black text-white shadow-md shadow-indigo-600/10 cursor-pointer"
                 >
-                   {saving ? (
-                            <div className="flex"><Loader2 className="h-4 w-4 animate-spin text-indigo-400 mr-2" /> Saving...</div>
-                        ) : "Save Changes"}
+                    {saving ? (
+                        <div className="flex"><Loader2 className="h-4 w-4 animate-spin text-indigo-400 mr-2" /> Saving...</div>
+                    ) : "Save Changes"}
                 </button>
             </div>
 
@@ -294,38 +294,23 @@ interface CancelModalProps {
 
 function CancelModal({ onCancelChanges, onBack }: CancelModalProps) {
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 p-4 backdrop-blur-xs">
-            <motion.div
-                initial={{ scale: 0.95, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900 p-6 space-y-5 shadow-2xl"
-            >
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-red-500/10 text-red-500 border border-red-500/20">
-                    <Trash2 className="h-5 w-5" />
-                </div>
-
-                <div className="space-y-2">
-                    <h3 className="text-base font-black text-white font-sans">Cancel Trait Editing?</h3>
-                    <p className="text-xs text-slate-400 leading-relaxed">
-                        You may have unsaved changes, are you sure you wish to cancel and close the editing form?
-                    </p>
-                </div>
-
-                <div className="flex gap-3">
-                    <button
-                        onClick={onBack}
-                        className="flex-1 rounded-xl border border-slate-805 bg-slate-900 py-2.5 text-xs font-bold text-slate-300 hover:bg-slate-800 cursor-pointer"
-                    >
-                        Back
-                    </button>
-                    <button
-                        onClick={onCancelChanges}
-                        className="flex items-center justify-center flex-1 rounded-xl bg-red-800 hover:bg-red-500 disabled:opacity-45 py-2.5 text-xs font-black text-white shadow-lg shadow-red-650/15 cursor-pointer"
-                    >
-                        Cancel Editing
-                    </button>
-                </div>
-            </motion.div>
-        </div>
+        <PopupModal
+            title="Cancel Trait Editing?"
+            subtitle="You may have unsaved changes, are you sure you wish to cancel and close the editing form?"
+            actions={[
+                <button
+                    onClick={onBack}
+                    className="flex-1 rounded-xl border border-slate-805 bg-slate-900 py-2.5 text-xs font-bold text-slate-300 hover:bg-slate-800 cursor-pointer"
+                >
+                    Back
+                </button>,
+                <button
+                    onClick={onCancelChanges}
+                    className="flex items-center justify-center flex-1 rounded-xl bg-red-800 hover:bg-red-500 disabled:opacity-45 py-2.5 text-xs font-black text-white shadow-lg shadow-red-650/15 cursor-pointer"
+                >
+                    Cancel Editing
+                </button>
+            ]}
+        />
     );
 }

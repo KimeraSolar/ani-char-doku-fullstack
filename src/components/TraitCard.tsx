@@ -3,6 +3,7 @@ import { Loader2, Pencil, Trash2 } from "lucide-react";
 import { motion } from "motion/react";
 import { useState } from "react";
 import EditTraitForm from "./EditTraitForm";
+import PopupModal from "./PopupModal";
 
 interface TraitCardProps {
     trait: Trait;
@@ -146,43 +147,28 @@ function DeleteTraitModal({ trait, onCancel, onConfirm }: DeleteTraitModalProps)
     }
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 p-4 backdrop-blur-xs">
-            <motion.div
-                initial={{ scale: 0.95, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900 p-6 space-y-5 shadow-2xl"
-            >
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-red-500/10 text-red-500 border border-red-500/20">
-                    <Trash2 className="h-5 w-5" />
-                </div>
-
-                <div className="space-y-2">
-                    <h3 className="text-base font-black text-white font-sans">Delete Registered Trait?</h3>
-                    <p className="text-xs text-slate-400 leading-relaxed">
-                        You are about to delete the trait <strong className="text-red-450">"{trait.name}"</strong> from the database.
-                    </p>
-                    <div className="rounded-xl bg-red-950/30 border border-red-900/40 p-3 text-[11px] font-bold text-red-300 leading-relaxed">
-                        ⚠️ This will remove this property from all{" "}
-                        <span className="text-white font-extrabold underline">{"X"}</span> registered characters currently using it. This action is irreversible.
-                    </div>
-                </div>
-
-                <div className="flex gap-3">
-                    <button
-                        onClick={onCancel}
-                        className="flex-1 rounded-xl border border-slate-805 bg-slate-900 py-2.5 text-xs font-bold text-slate-300 hover:bg-slate-800 cursor-pointer"
-                    >
-                        Back
-                    </button>
-                    <button
-                        onClick={() => handleConfirmDelete()}
-                        disabled={processing}
-                        className="flex items-center justify-center flex-1 rounded-xl bg-red-800 hover:bg-red-500 disabled:opacity-45 py-2.5 text-xs font-black text-white shadow-lg shadow-red-650/15 cursor-pointer"
-                    >
-                        {processing ? (<><Loader2 className="h-5 w-5 animate-spin text-white mr-2" /> Deleting...</>) : "Confirm Deletion"}
-                    </button>
-                </div>
-            </motion.div>
-        </div>
+        <PopupModal
+            icon={{
+                icon: <Trash2 className="h-5 w-5" />,
+                color: "red"
+            }}
+            title="Delete Registered Trait?"
+            subtitle={<>You are about to delete the trait <strong className="text-indigo-500">{trait.name.toLocaleUpperCase()}</strong> from the database. This will remove this property from all registered characters currently using it. This action is irreversible.</>}
+            actions={[
+                <button
+                    onClick={onCancel}
+                    className="flex-1 rounded-xl border border-slate-805 bg-slate-900 py-2.5 text-xs font-bold text-slate-300 hover:bg-slate-800 cursor-pointer"
+                >
+                    Back
+                </button>,
+                <button
+                    onClick={() => handleConfirmDelete()}
+                    disabled={processing}
+                    className="flex items-center justify-center flex-1 rounded-xl bg-red-800 hover:bg-red-500 disabled:opacity-45 py-2.5 text-xs font-black text-white shadow-lg shadow-red-650/15 cursor-pointer"
+                >
+                    {processing ? (<><Loader2 className="h-5 w-5 animate-spin text-white mr-2" /> Deleting...</>) : "Confirm Deletion"}
+                </button>
+            ]}
+        />
     );
 }
