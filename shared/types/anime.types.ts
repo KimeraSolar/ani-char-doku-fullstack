@@ -3,6 +3,8 @@ export interface AnimeTitle {
   title: string;
 }
 
+export type AnimeMediaType = "tv" | "movie" | "ova" | "special";
+
 export interface Anime {
   mal_id: number;
   title: string;
@@ -15,7 +17,7 @@ export interface Anime {
   };
   score?: number;
   synopsis?: string;
-  type?: string;
+  type?: AnimeMediaType;
   episodes?: number;
   source?: string;
   year?: number | null;

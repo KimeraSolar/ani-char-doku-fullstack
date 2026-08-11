@@ -5,3 +5,4 @@ export * from "./character.route.js";
 export * from "./puzzle.route.js";
 export * from "./trait.route.js";
 export * from "./user.route.js";
+export * from "./app.route.js";

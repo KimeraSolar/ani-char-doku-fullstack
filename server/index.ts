@@ -1,6 +1,6 @@
 import express, { Request, Response } from 'express';
 import cors from 'cors';
-import { animeRoutes, apiRoutes, characterRoutes, firebaseRoutes, puzzleRoutes, traitRoutes, userRoutes } from '../server/routes/index.js';
+import { animeRoutes, apiRoutes, AppRoutes, characterRoutes, firebaseRoutes, puzzleRoutes, traitRoutes, userRoutes } from '../server/routes/index.js';
 
 const app = express();
 
@@ -23,6 +23,7 @@ await characterRoutes(app);
 await traitRoutes(app);
 await userRoutes(app);
 await puzzleRoutes(app);
+await AppRoutes(app);
 
 if (process.env.NODE_ENV !== 'production') {
   const PORT = process.env.PORT || 3001;

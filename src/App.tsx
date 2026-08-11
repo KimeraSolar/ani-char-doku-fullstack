@@ -5,8 +5,8 @@ import { RegisteredCharacter } from "@shared/types/index";
 import { Ban } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { AdminProtectedRoute, BrowsePageRedirect, OwnerProtectedRoute, ProtectedRoute } from "./components/Router";
-import { AdminUsersView, AnimeGrid, CharacterGrid, DatabaseView, Header, LoginModal, ProfilePage, RegisterForm, SudokuGame, TraitsConfigView } from "./components";
-import { TraitsPage } from "./pages";
+import { AdminUsersView, AnimeGrid, CharacterGrid, DatabaseView, Header, LoginModal, ProfilePage, RegisterForm, SudokuGame } from "./components";
+import { AnimePage, TraitsPage } from "./pages";
 import { AppProvider, useApp } from "./context/AppContext";
 
 function AppContent() {
@@ -14,7 +14,7 @@ function AppContent() {
   const [dbAnimes, setDbAnimes] = useState<any[]>([]);
   const [dbLoading, setDbLoading] = useState(true);
   const [firebaseStatus, setFirebaseStatus] = useState<{ isConfigured: boolean; usingFallback: boolean; error?: string } | null>(null);
-  const { traitsCount, updateTraitsCount } = useApp();
+  const { traitsCount, charsCount, animeCount, updateCount } = useApp();
 
   const { user, isBanned } = useAuth();
   const navigate = useNavigate();
@@ -41,14 +41,14 @@ function AppContent() {
         setDbAnimes(data);
       }
 
-      // Fetch traits count
-      const traitsRes = await fetch("/api/traits/count");
-      if (traitsRes.ok) {
-        const traitsData = await traitsRes.json();
-        updateTraitsCount(traitsData.count);
+      // Fetch registered items count
+      const itemsCount = await fetch("/api/app/registered/count");
+      if (itemsCount.ok) {
+        const itemsCountData = await itemsCount.json();
+        updateCount(itemsCountData);
       }
     } catch (err) {
-      console.error("Failed to load local db:", err);
+      console.error("Failed to load items count data:", err);
     } finally {
       setDbLoading(false);
     }
@@ -91,9 +91,9 @@ function AppContent() {
 
       {/* Premium Header */}
       <Header
-        dbCount={dbCharacters.length}
+        dbCount={charsCount}
         traitsCount={traitsCount}
-        animesCount={dbAnimes.length}
+        animesCount={animeCount}
       />
 
       {/* Main Container viewport */}
@@ -171,6 +171,23 @@ function AppContent() {
                       dbCharacters={dbCharacters}
                       dbAnimes={dbAnimes}
                     />
+                  </motion.div>
+                </AdminProtectedRoute>
+              }
+            />
+            
+            <Route
+              path="/browse-new"
+              element={
+                <AdminProtectedRoute>
+                  <motion.div
+                    key="anime-list-view"
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -8 }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    <AnimePage />
                   </motion.div>
                 </AdminProtectedRoute>
               }
