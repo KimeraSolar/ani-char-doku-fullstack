@@ -22,7 +22,7 @@ export type MALAnimeResponse = {
     score: number;
     source: string;
     title: string;
-    title_english: string;
+    title_english?: string;
     type: string;
     url: string;
     year: number;
