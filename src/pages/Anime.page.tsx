@@ -1,19 +1,23 @@
 import { useEffect, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import { useApp } from "../context";
 import { Loading } from "../components/Loading";
 import { animeSourceFormats } from "@shared/consts";
-import { AnimeMediaType } from "@shared/types";
+import { AnimeMediaType, AnimeRegistry, PaginatedResponse } from "@shared/types";
 import { Database, Search } from "lucide-react";
 import { useDebounce } from "../hooks/useDebounce";
+import { AnimeCatalog } from "../components";
 
 export default function AnimePage() {
     const [searchParams, setSearchParams] = useSearchParams();
     const { animeCount, loadedData } = useApp();
     const [loading, setLoading] = useState<boolean>(true);
+    const [error, setError] = useState<boolean>(false);
+    const [currentPage, setCurrentPage] = useState<number>(1);
     const [mediaTypeFilter, setMediaTypeFilter] = useState<AnimeMediaType | null>(null);
     const [searchQuery, setSearchQuery] = useState<string>("");
     const [showOnlyRegistered, setShowOnlyRegistered] = useState<boolean>(false);
+    const [animePage, setAnimePage] = useState<PaginatedResponse<AnimeRegistry[]> | null>(null);
     const debouncedSearch = useDebounce<string>(searchQuery.trim(), 1000);
 
     function selectMediaType(mediaType: AnimeMediaType) {
@@ -46,6 +50,47 @@ export default function AnimePage() {
         setShowOnlyRegistered(!showOnlyRegistered);
     }
 
+    async function fetchMALAnime({ page, query, type }: { page: number, query: string | null, type: string | null }) {
+        setLoading(true);
+        try {
+            const res = await fetch(`/api/mal/anime?page=${page}&type=${type || ""}&query=${query || ""}`);
+            const paginatedAnime: PaginatedResponse<AnimeRegistry[]> = await res.json();
+            setAnimePage(paginatedAnime);
+        } catch (err) {
+            console.error("Error fetching animes:", err);
+            setError(true);
+        } finally {
+            setLoading(false);
+        }
+
+    }
+
+    useEffect(() => {
+        const page = searchParams.get("page");
+        const type = searchParams.get("mediaType");
+        const query = searchParams.get("query");
+        const dbOnly = searchParams.get("dbOnly");
+
+        if (page) setCurrentPage(Number(page));
+        if (type) setMediaTypeFilter(type as AnimeMediaType);
+        if (query) setSearchQuery(query);
+        if (dbOnly === "true") setShowOnlyRegistered(true);
+    }, []);
+
+    useEffect(() => {
+        if (currentPage > 0) {
+            setSearchParams(searchParams => {
+                searchParams.set("page", String(currentPage));
+                return searchParams;
+            });
+        } else {
+            setSearchParams(searchParams => {
+                searchParams.set("page", "1");
+                return searchParams;
+            });
+        }
+    }, [currentPage]);
+
     useEffect(() => {
         const page = searchParams.get("page");
         if (!page) {
@@ -53,6 +98,18 @@ export default function AnimePage() {
                 searchParams.set("page", "1");
                 return searchParams;
             });
+        } else {
+            const page = Number(searchParams.get("page"));
+            const type = searchParams.get("mediaType");
+            const query = searchParams.get("query");
+
+            const dbOnly = searchParams.get("dbOnly");
+            if (dbOnly === "true") {
+                console.warn("Skipping: Registered Anime search not implemented yet.");
+                setAnimePage(null);
+            } else {
+                fetchMALAnime({ page, type, query });
+            }
         }
     }, [searchParams]);
 
@@ -69,7 +126,7 @@ export default function AnimePage() {
                 return searchParams;
             });
         } else {
-             setSearchParams(searchParams => {
+            setSearchParams(searchParams => {
                 searchParams.delete("dbOnly");
                 return searchParams;
             });
@@ -153,6 +210,43 @@ export default function AnimePage() {
                     <span>Show Only Registered</span>
                 </button>
             </div>
+
+            {/* Loading Skeleton Grid */}
+            {loading && (
+                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
+                    {Array.from({ length: 15 }).map((_, idx) => (
+                        <div
+                            key={`skeleton-${idx}`}
+                            className="group flex flex-col overflow-hidden rounded-2xl border border-slate-900 bg-slate-900/50 shadow-xs"
+                        >
+                            <div className="relative aspect-3/4 w-full animate-pulse bg-slate-800" />
+                            <div className="flex flex-1 flex-col p-4 space-y-3">
+                                <div className="h-4.5 w-3/4 animate-pulse rounded-lg bg-slate-800" />
+                                <div className="h-3 w-1/2 animate-pulse rounded-lg bg-slate-800" />
+                                <div className="mt-auto pt-3">
+                                    <div className="h-9 w-full animate-pulse rounded-xl bg-slate-810" />
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            {/* Empty State */}
+            {!loading && !animePage?.data.length && (
+                <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-800 p-16 text-center">
+                    <p className="text-slate-500 text-sm font-medium">
+                        {"No animes found."}
+                    </p>
+                </div>
+            )}
+
+            {/* Anime Catalog Display */}
+            {!loading && animePage?.data && animePage?.data.length > 0 && (
+                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
+                    <AnimeCatalog animes={animePage.data} onViewAnime={() => { }} />
+                </div>
+            )}
         </div>
     );
 }

@@ -3,3 +3,4 @@ export * from "./character.types";
 export * from "./puzzle.types";
 export * from "./trait.types";
 export * from "./user.types";
+export * from "./api.types";
