@@ -6,7 +6,7 @@ import { animeSourceFormats } from "@shared/consts";
 import { AnimeMediaType, AnimeRegistry, PaginatedResponse } from "@shared/types";
 import { Database, Search } from "lucide-react";
 import { useDebounce } from "../hooks/useDebounce";
-import { AnimeCatalog } from "../components";
+import { AnimeCatalog, ErrorDisplay, Pagination } from "../components";
 
 export default function AnimePage() {
     const [searchParams, setSearchParams] = useSearchParams();
@@ -52,6 +52,7 @@ export default function AnimePage() {
 
     async function fetchMALAnime({ page, query, type }: { page: number, query: string | null, type: string | null }) {
         setLoading(true);
+        setError(false);
         try {
             const res = await fetch(`/api/mal/anime?page=${page}&type=${type || ""}&query=${query || ""}`);
             const paginatedAnime: PaginatedResponse<AnimeRegistry[]> = await res.json();
@@ -93,7 +94,7 @@ export default function AnimePage() {
 
     useEffect(() => {
         const page = searchParams.get("page");
-        if (!page) {
+        if (!page || !(/^\d+$/.test(page)) || Number(page) < 1) {
             setSearchParams(searchParams => {
                 searchParams.set("page", "1");
                 return searchParams;
@@ -148,6 +149,8 @@ export default function AnimePage() {
     }, [mediaTypeFilter]);
 
     if (!loadedData) return <Loading message="Loading data, please wait..." />;
+
+    const dataLoadedOk = !loading && !error;
 
     return (
         <div className="space-y-6">
@@ -233,7 +236,7 @@ export default function AnimePage() {
             )}
 
             {/* Empty State */}
-            {!loading && !animePage?.data.length && (
+            {dataLoadedOk && !animePage?.data.length && (
                 <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-800 p-16 text-center">
                     <p className="text-slate-500 text-sm font-medium">
                         {"No animes found."}
@@ -242,10 +245,24 @@ export default function AnimePage() {
             )}
 
             {/* Anime Catalog Display */}
-            {!loading && animePage?.data && animePage?.data.length > 0 && (
-                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
-                    <AnimeCatalog animes={animePage.data} onViewAnime={() => { }} />
-                </div>
+            {dataLoadedOk && animePage?.data && animePage?.data.length > 0 && (
+                <>
+                    <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
+                        <AnimeCatalog animes={animePage.data} onViewAnime={() => { }} />
+                    </div>
+                    <Pagination
+                        currentPage={animePage.pagination.current_page}
+                        totalPages={animePage.pagination.last_visible_page}
+                        totalItems={animePage.pagination.items.total}
+                        itemsPerPage={animePage.pagination.items.per_page}
+                        onGoToPage={(page) => setCurrentPage(page)}
+                    />
+                </>
+            )}
+
+            {/* Error State */}
+            {!loading && error && (
+                <ErrorDisplay title="Failed to browse Animes" />
             )}
         </div>
     );

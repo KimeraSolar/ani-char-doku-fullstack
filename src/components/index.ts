@@ -15,3 +15,5 @@ export { default as TraitCard } from "./TraitCard";
 export { default as AddTraitForm } from "./AddTraitForm";
 export { default as PopupModal } from "./PopupModal";
 export { default as AnimeCatalog } from "./AnimeCatalog"; // New Anime component
+export { default as Pagination } from "./Pagination";
+export { default as ErrorDisplay } from "./Error";
