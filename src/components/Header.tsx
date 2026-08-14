@@ -1,4 +1,4 @@
-import { Award, Grid3X3, Sliders, Users, Tv, Shield } from "lucide-react";
+import { Award, Grid3X3, Sliders, Users, Tv, Shield, Loader2 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../context";
 
@@ -59,7 +59,8 @@ export default function Header({ dbCount, traitsCount, animesCount }: HeaderProp
                     isTraitsActive ? "scale-105 text-indigo-200" : "group-hover:scale-105"
                   }`} />
                   <span className="hidden sm:inline">Traits</span>
-                  <span
+                  {traitsCount < 0 && <Loader2 className="h-4 w-4 animate-spin text-indigo-400" />}
+                  {traitsCount >= 0 && <span
                     className={`ml-0.5 sm:ml-1 flex h-4.5 min-w-4.5 sm:h-5 sm:w-5 items-center justify-center rounded-full px-1 sm:px-1.5 text-[10px] sm:text-[11px] font-bold font-mono transition-colors ${
                       isTraitsActive
                         ? "bg-indigo-800 text-indigo-100"
@@ -67,11 +68,11 @@ export default function Header({ dbCount, traitsCount, animesCount }: HeaderProp
                     }`}
                   >
                     {traitsCount}
-                  </span>
+                  </span>}
                 </Link>
               )}
 
-              {/* Database Tab (Visible to all logged-in users, including User level) */}
+              {/* Characters Tab (Visible to all logged-in users, including User level) */}
               <Link
                 to="/database"
                 title="Character Database"
@@ -85,7 +86,8 @@ export default function Header({ dbCount, traitsCount, animesCount }: HeaderProp
                   isDatabaseActive ? "scale-105 text-indigo-400" : "group-hover:scale-105"
                 }`} />
                 <span className="hidden sm:inline">Characters</span>
-                <span
+                { dbCount < 0 && <Loader2 className="h-4 w-4 animate-spin text-indigo-400" />}
+                { dbCount >= 0 && <span
                   className={`ml-0.5 sm:ml-1 flex h-4.5 min-w-4.5 sm:h-5 sm:w-5 items-center justify-center rounded-full px-1 sm:px-1.5 text-[10px] sm:text-[11px] font-bold font-mono transition-colors ${
                     isDatabaseActive
                       ? "bg-indigo-600 text-white"
@@ -93,10 +95,10 @@ export default function Header({ dbCount, traitsCount, animesCount }: HeaderProp
                   }`}
                 >
                   {dbCount}
-                </span>
+                </span>}
               </Link>
 
-              {/* Explore Top Anime Tab (Browse) (Admin & Owner Only) */}
+              {/* Animes Tab (Admin & Owner Only) */}
               {isAdmin && (
                 <Link
                   to="/browse"
@@ -111,7 +113,8 @@ export default function Header({ dbCount, traitsCount, animesCount }: HeaderProp
                     isBrowseActive ? "scale-105 text-indigo-200" : "group-hover:scale-105"
                   }`} />
                   <span className="hidden sm:inline">Anime</span>
-                  <span
+                  {animesCount < 0 && <Loader2 className="h-4 w-4 animate-spin text-indigo-400" />}
+                  {animesCount >= 0 && <span
                     className={`ml-0.5 sm:ml-1 flex h-4.5 min-w-4.5 sm:h-5 sm:w-5 items-center justify-center rounded-full px-1 sm:px-1.5 text-[10px] sm:text-[11px] font-bold font-mono transition-colors ${
                       isBrowseActive
                         ? "bg-indigo-800 text-indigo-100"
@@ -119,7 +122,7 @@ export default function Header({ dbCount, traitsCount, animesCount }: HeaderProp
                     }`}
                   >
                     {animesCount}
-                  </span>
+                  </span>}
                 </Link>
               )}
 
