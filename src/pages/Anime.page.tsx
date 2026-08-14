@@ -14,7 +14,7 @@ export default function AnimePage() {
     const [loading, setLoading] = useState<boolean>(true);
     const [error, setError] = useState<boolean>(false);
     const [currentPage, setCurrentPage] = useState<number>(1);
-    const [mediaTypeFilter, setMediaTypeFilter] = useState<AnimeMediaType | null>(null);
+    const [mediaTypeFilter, setMediaTypeFilter] = useState<AnimeMediaType | "">("");
     const [searchQuery, setSearchQuery] = useState<string>("");
     const [showOnlyRegistered, setShowOnlyRegistered] = useState<boolean>(false);
     const [animePage, setAnimePage] = useState<PaginatedResponse<AnimeRegistry[]> | null>(null);
@@ -22,7 +22,7 @@ export default function AnimePage() {
 
     function selectMediaType(mediaType: AnimeMediaType) {
         if (mediaTypeFilter === mediaType) {
-            setMediaTypeFilter(null);
+            setMediaTypeFilter("");
         } else {
             setMediaTypeFilter(mediaType);
         }
@@ -121,6 +121,7 @@ export default function AnimePage() {
     }, [debouncedSearch]);
 
     useEffect(() => {
+        searchParams.set("page", "1");
         if (showOnlyRegistered) {
             setSearchParams(searchParams => {
                 searchParams.set("dbOnly", "true");
@@ -135,7 +136,8 @@ export default function AnimePage() {
     }, [showOnlyRegistered]);
 
     useEffect(() => {
-        if (mediaTypeFilter !== null) {
+        searchParams.set("page", "1");
+        if (mediaTypeFilter !== "") {
             setSearchParams(searchParams => {
                 searchParams.set("mediaType", mediaTypeFilter);
                 return searchParams;

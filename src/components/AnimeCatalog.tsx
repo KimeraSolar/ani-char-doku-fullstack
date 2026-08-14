@@ -10,7 +10,7 @@ interface AnimeCatalogProps {
 export default function AnimeCatalog({ animes, onViewAnime }: AnimeCatalogProps) {
 
     return (
-        animes.map((anime, index) => {
+        animes.map((anime) => {
             const { mal_id, image_url, title, score, id, type, registered_chars, source, year, genres } = anime;
             const dataColor = id ? "emerald" : "indigo"
             return (
@@ -18,7 +18,7 @@ export default function AnimeCatalog({ animes, onViewAnime }: AnimeCatalogProps)
                 key={`anime-mal-id-${mal_id}`}
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3, delay: Math.min(index * 0.03, 0.4) }}
+                transition={{ duration: 0.3 }}
                 className="group flex flex-col overflow-hidden rounded-2xl border border-slate-850 bg-slate-900/40 hover:bg-slate-900/80 shadow-xs hover:border-slate-750 transition-all duration-300 hover:shadow-black/40 hover:shadow-lg"
             >
                 {/* Anime Thumbnail */}
