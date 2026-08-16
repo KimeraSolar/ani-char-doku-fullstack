@@ -1,33 +1,32 @@
 import { Express } from "express";
 import { fetchAllAnimes, saveAnimeRecord } from "../model/index.js";
-import { getMALAnime, registerNewAnime, searchMALAnime } from "server/controller/anime.controller.js";
+import { getAnimeDetails, registerNewAnime, searchAnime } from "server/controller/anime.controller.js";
 import { AnimeMediaType, AnimeRegistry } from "@shared/types/anime.types.js";
 
 export async function animeRoutes(app: Express) {
-    // MAL API Routes
-    // Search MAL animes
-    app.get("/api/mal/anime", async (req, res) => {
-        const { page, query, type } = req.query;
+    app.get("/api/anime", async (req, res) => {
+        const { page, query, type, dbOnly } = req.query;
         const validatedPage = (Number(page) > 0) ? Number(page) : 1;
         const validatedQuery = query ? String(query) : undefined;
         const validatedType = type ? String(type) as AnimeMediaType : undefined;
+        const validatedDbOnly = dbOnly === "true" || false;
         try {
-            const searchResults = await searchMALAnime(validatedPage, validatedType, validatedQuery);
+            const searchResults = await searchAnime(validatedPage, validatedType, validatedQuery, validatedDbOnly);
             res.status(200).json(searchResults);
         } catch (err) {
-            console.error("[MAL API Route] Failed to search animes:", err);
+            console.error("[Anime Route] Failed to search animes:", err);
             res.status(500).json({ error: `Failed to search animes: ${err}` });
         }
     });
 
     // Get MAL anime details
-    app.get("/api/mal/anime/:id", async (req, res) => {
+    app.get("/api/anime/:id", async (req, res) => {
         const { id } = req.params;
         if (!id) {
             return res.status(400).json({ error: "Invalid anime data: ID is required." });
         }
         try {
-            const animeResult = await getMALAnime(Number(id));
+            const animeResult = await getAnimeDetails(Number(id));
             res.status(200).json(animeResult);
         } catch (err) {
             console.error("[MAL API Route] Failed to fetch anime details:", err);

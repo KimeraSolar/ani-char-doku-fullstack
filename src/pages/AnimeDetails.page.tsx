@@ -19,7 +19,7 @@ export default function AnimeDetailsPage() {
         setLoading(true);
         setError(false);
         try {
-            const res = await fetch(`/api/mal/anime/${animeId}`);
+            const res = await fetch(`/api/anime/${animeId}`);
             const anime: AnimeRegistry = await res.json();
             setAnimeRegistry(anime);
         } catch (err) {

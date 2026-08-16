@@ -37,7 +37,7 @@ export async function getCached<T>(
 
 const API_BASE_URL = process.env.MAL_PROXY_API_BASE_URL || "";
 
-export async function getTopAnime(page: number, type?: string): Promise<PaginatedResponse<AnimeRegistry[]> | null> {
+export async function getMALTopAnime(page: number, type?: string): Promise<PaginatedResponse<AnimeRegistry[]> | null> {
   try {
     const topAnime = await fetch(`${API_BASE_URL}/top/anime?page=${page}&limit=25${type ? "&type=" + type : ""}`);
     const topAnimeData: PaginatedResponse<MALAnimeResponse[]> = await topAnime.json();
@@ -66,7 +66,7 @@ export async function getTopAnime(page: number, type?: string): Promise<Paginate
   }
 }
 
-export async function searchAnime(page: number, query: string, type?: string): Promise<PaginatedResponse<AnimeRegistry[]> | null> {
+export async function searchMALAnime(page: number, query: string, type?: string): Promise<PaginatedResponse<AnimeRegistry[]> | null> {
   try {
     const animeSearch = await fetch(`${API_BASE_URL}/anime?page=${page}&limit=25${type ? "&type=" + type : ""}&q=${query}`);
     const animeSearchData: PaginatedResponse<MALAnimeResponse[]> = await animeSearch.json();
@@ -95,7 +95,7 @@ export async function searchAnime(page: number, query: string, type?: string): P
   }
 }
 
-export async function getAnimeDetails(malId: number): Promise<AnimeRegistry | null> {
+export async function getMALAnimeDetails(malId: number): Promise<AnimeRegistry | null> {
   try {
     const anime = await fetch(`${API_BASE_URL}/anime/${malId}/full`);
     const animeRes: DefaultResponse<MALAnimeResponse> = await anime.json();

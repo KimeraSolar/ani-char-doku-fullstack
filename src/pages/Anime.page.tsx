@@ -52,11 +52,11 @@ export default function AnimePage() {
         setShowOnlyRegistered(!showOnlyRegistered);
     }
 
-    async function fetchMALAnime({ page, query, type }: { page: number, query: string | null, type: string | null }) {
+    async function fetchAnime({ page, query, type, dbOnly }: { page: number, query: string | null, type: string | null, dbOnly: string | null }) {
         setLoading(true);
         setError(false);
         try {
-            const res = await fetch(`/api/mal/anime?page=${page}&type=${type || ""}&query=${query || ""}`);
+            const res = await fetch(`/api/anime?page=${page}&type=${type || ""}&query=${query || ""}&dbOnly=${dbOnly || "false"}`);
             const paginatedAnime: PaginatedResponse<AnimeRegistry[]> = await res.json();
             setAnimePage(paginatedAnime);
         } catch (err) {
@@ -109,14 +109,8 @@ export default function AnimePage() {
             const page = Number(searchParams.get("page"));
             const type = searchParams.get("mediaType");
             const query = searchParams.get("query");
-
             const dbOnly = searchParams.get("dbOnly");
-            if (dbOnly === "true") {
-                console.warn("Skipping: Registered Anime search not implemented yet.");
-                setAnimePage(null);
-            } else {
-                fetchMALAnime({ page, type, query });
-            }
+            fetchAnime({ page, type, query, dbOnly });
         }
     }, [searchParams]);
 

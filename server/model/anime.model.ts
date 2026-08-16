@@ -5,6 +5,62 @@ import { throwErrorResponse } from "@shared/utils/index.js";
 
 const ANIME_COL_NAME = "animes";
 
+export async function fetchAnimes(malIDFilter?: number[]): Promise<AnimeRegistry[] | null> {
+  const animesCollection = await getDBCollection(ANIME_COL_NAME);
+  if (!animesCollection) {
+    throw new Error("MongoDB error. Cannot fetch anime IDs.");
+  }
+
+  try {
+    if (malIDFilter && malIDFilter.length > 0) {
+      const filteredAnimes = await animesCollection.find({
+        mal_id: { $in: malIDFilter }
+      }).toArray();
+      return filteredAnimes.map(anime => {
+        const { _id, ...rest } = anime;
+        return {
+          id: _id.toHexString(),
+          ...rest,
+        }
+      }) as AnimeRegistry[];
+    } else {
+      const animes = await animesCollection.find().toArray();
+      return animes.map(anime => {
+        const { _id, ...rest } = anime;
+        return {
+          id: _id.toHexString(),
+          ...rest,
+        }
+      }) as AnimeRegistry[];
+    }
+  } catch (err) {
+    throwErrorResponse("[Anime Model] MongoDB read error for animes:", err);
+    return null;
+  }
+}
+
+export async function fetchAnimeDetails(malId: number): Promise<AnimeRegistry | null> {
+  const animesCollection = await getDBCollection(ANIME_COL_NAME);
+  if (!animesCollection) {
+    throw new Error("MongoDB error. Cannot fetch anime IDs.");
+  }
+
+  try {
+    const anime = await animesCollection.findOne({
+      mal_id: { $eq: malId },
+    });
+    if (!anime) throw new Error("Failed to find anime by MAL ID.");
+    const { _id, ...rest } = anime;
+    return {
+      id: _id.toHexString(),
+      ...rest,
+    } as AnimeRegistry;
+  } catch (err) {
+    throwErrorResponse("[Anime Model] MongoDB read error for animes:", err);
+    return null;
+  }
+}
+
 export async function createAnime(newAnime: AnimeRegistry): Promise<AnimeRegistry | null> {
   const animesCollection = await getDBCollection(ANIME_COL_NAME);
   if (!animesCollection) {
