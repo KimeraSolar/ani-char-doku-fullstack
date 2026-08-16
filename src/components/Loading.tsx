@@ -4,7 +4,7 @@ interface LoadingProps {
     message?: string;
 }
 
-export function Loading({ message }: LoadingProps) {
+export default function Loading({ message }: LoadingProps) {
     return (
         <div className="flex flex-col items-center justify-center min-h-[50vh] text-slate-400">
         <Loader2 className="h-8 w-8 animate-spin text-indigo-400 mb-2" />

@@ -1,6 +1,6 @@
 import { Express } from "express";
 import { fetchAllAnimes, saveAnimeRecord } from "../model/index.js";
-import { searchMALAnime } from "server/controller/anime.controller.js";
+import { getMALAnime, searchMALAnime } from "server/controller/anime.controller.js";
 import { AnimeMediaType } from "@shared/types/anime.types.js";
 
 export async function animeRoutes(app: Express) {
@@ -17,6 +17,20 @@ export async function animeRoutes(app: Express) {
             res.status(500).json({ error: `Failed to search animes: ${err}` });
         }
     });
+
+    app.get("/api/mal/anime/:id", async (req, res) => {
+        const { id } = req.params;
+        if (!id) {
+            return res.status(400).json({ error: "Invalid anime data: ID is required." });
+        }
+        try {
+            const animeResult = await getMALAnime(Number(id));
+            res.status(200).json(animeResult);
+        } catch (err) {
+            console.error("[MAL API Route] Failed to fetch anime details:", err);
+            res.status(500).json({ error: `Failed to fetch anime details: ${err}` });
+        }
+    })
 
     // OLD ROUTES
     app.get("/api/database/animes", async (req, res) => {

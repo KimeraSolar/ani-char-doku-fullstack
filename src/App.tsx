@@ -6,7 +6,7 @@ import { Ban } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { AdminProtectedRoute, BrowsePageRedirect, OwnerProtectedRoute, ProtectedRoute } from "./components/Router";
 import { AdminUsersView, AnimeGrid, CharacterGrid, DatabaseView, Header, LoginModal, ProfilePage, RegisterForm, SudokuGame } from "./components";
-import { AnimePage, TraitsPage } from "./pages";
+import { AnimeDetailsPage, AnimePage, TraitsPage } from "./pages";
 import { AppProvider, useApp } from "./context/AppContext";
 
 function AppContent() {
@@ -155,6 +155,41 @@ function AppContent() {
               }
             />
 
+            {/* New Anime List views (Admin & Owner Protected) */}
+            <Route
+              path="/browse-new"
+              element={
+                <AdminProtectedRoute>
+                  <motion.div
+                    key="anime-list-view"
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -8 }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    <AnimePage />
+                  </motion.div>
+                </AdminProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/browse-new/:animeId"
+              element={
+                <AdminProtectedRoute>
+                  <motion.div
+                    key="anime-list-view"
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -8 }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    <AnimeDetailsPage />
+                  </motion.div>
+                </AdminProtectedRoute>
+              }
+            />
+
             {/* Browse / Anime List views (Admin & Owner Protected) */}
             <Route
               path="/browse"
@@ -171,23 +206,6 @@ function AppContent() {
                       dbCharacters={dbCharacters}
                       dbAnimes={dbAnimes}
                     />
-                  </motion.div>
-                </AdminProtectedRoute>
-              }
-            />
-            
-            <Route
-              path="/browse-new"
-              element={
-                <AdminProtectedRoute>
-                  <motion.div
-                    key="anime-list-view"
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -8 }}
-                    transition={{ duration: 0.2 }}
-                  >
-                    <AnimePage />
                   </motion.div>
                 </AdminProtectedRoute>
               }

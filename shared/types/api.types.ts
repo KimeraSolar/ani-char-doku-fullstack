@@ -11,6 +11,10 @@ export type PaginatedResponse<T> = {
     data: T;
 };
 
+export type DefaultResponse<T> = {
+    data: T;
+}
+
 export type MALAnimeResponse = {
     genres: Array<{ name: string }>;
     images: {

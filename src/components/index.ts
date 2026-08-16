@@ -17,3 +17,4 @@ export { default as PopupModal } from "./PopupModal";
 export { default as AnimeCatalog } from "./AnimeCatalog"; // New Anime component
 export { default as Pagination } from "./Pagination";
 export { default as ErrorDisplay } from "./Error";
+export { default as Loading } from "./Loading";

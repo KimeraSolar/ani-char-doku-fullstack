@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useApp } from "../context";
-import { Loading } from "../components/Loading";
 import { animeSourceFormats } from "@shared/consts";
 import { AnimeMediaType, AnimeRegistry, PaginatedResponse } from "@shared/types";
 import { Database, Search } from "lucide-react";
 import { useDebounce } from "../hooks/useDebounce";
-import { AnimeCatalog, ErrorDisplay, Pagination } from "../components";
+import { AnimeCatalog, ErrorDisplay, Pagination, Loading } from "../components";
+
+const debounceTime = 450;
 
 export default function AnimePage() {
     const [searchParams, setSearchParams] = useSearchParams();
@@ -18,7 +19,8 @@ export default function AnimePage() {
     const [searchQuery, setSearchQuery] = useState<string>("");
     const [showOnlyRegistered, setShowOnlyRegistered] = useState<boolean>(false);
     const [animePage, setAnimePage] = useState<PaginatedResponse<AnimeRegistry[]> | null>(null);
-    const debouncedSearch = useDebounce<string>(searchQuery.trim(), 1000);
+    const debouncedSearch = useDebounce<string>(searchQuery.trim(), debounceTime);
+    const navigate = useNavigate();
 
     function selectMediaType(mediaType: AnimeMediaType) {
         if (mediaTypeFilter === mediaType) {
@@ -64,6 +66,10 @@ export default function AnimePage() {
             setLoading(false);
         }
 
+    }
+
+    function navigateToAnimePage(anime: AnimeRegistry) {
+        navigate(`${anime.mal_id}`);
     }
 
     useEffect(() => {
@@ -117,7 +123,7 @@ export default function AnimePage() {
     useEffect(() => {
         setTimeout(() => {
             updateSearchQuery(encodeURI(debouncedSearch));
-        }, 1000);
+        }, debounceTime);
     }, [debouncedSearch]);
 
     useEffect(() => {
@@ -238,7 +244,7 @@ export default function AnimePage() {
             )}
 
             {/* Empty State */}
-            {dataLoadedOk && !animePage?.data.length && (
+            {dataLoadedOk && !animePage?.data?.length && (
                 <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-800 p-16 text-center">
                     <p className="text-slate-500 text-sm font-medium">
                         {"No animes found."}
@@ -250,7 +256,7 @@ export default function AnimePage() {
             {dataLoadedOk && animePage?.data && animePage?.data.length > 0 && (
                 <>
                     <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
-                        <AnimeCatalog animes={animePage.data} onViewAnime={() => { }} />
+                        <AnimeCatalog animes={animePage.data} onViewAnime={navigateToAnimePage} />
                     </div>
                     <Pagination
                         currentPage={animePage.pagination.current_page}
