@@ -1,5 +1,36 @@
+import { AnimeRegistry } from "@shared/types/anime.types.js";
 import { db } from "./config.model.js";
+import { getDBCollection } from "./mongodb.model.js";
+import { throwErrorResponse } from "@shared/utils/index.js";
 
+const ANIME_COL_NAME = "animes";
+
+export async function createAnime(newAnime: AnimeRegistry): Promise<AnimeRegistry | null> {
+  const animesCollection = await getDBCollection(ANIME_COL_NAME);
+  if (!animesCollection) {
+    throw new Error("MongoDB error. Cannot create anime.");
+  }
+
+  try {
+    const { id, registered_chars, ...animeToSave } = newAnime;
+    const dateNow = new Date().toISOString();
+    const savedTrait = await animesCollection.insertOne({
+      ...animeToSave,
+      registered_chars: registered_chars || 0,
+      created_at: dateNow,
+      updated_at: dateNow,
+    });
+    return {
+      id: savedTrait.insertedId.toHexString(),
+      ...animeToSave
+    }
+  } catch (err) {
+    throwErrorResponse("[Anime Model] MongoDB write error for animes:", err);
+    return null;
+  }
+}
+
+// Old Anime DB Functions (connects to Firestore)
 export async function fetchAllAnimes(): Promise<any[]> {
   if (!db) {
     console.error("Firestore is not initialized. Cannot fetch animes.");
@@ -9,11 +40,11 @@ export async function fetchAllAnimes(): Promise<any[]> {
   try {
     const snapshot = await db.collection("animes").get();
     const list: any[] = [];
-    
+
     snapshot.forEach((doc) => {
       list.push({ ...doc.data() });
     });
-    
+
     return list;
   } catch (err) {
     console.error("Firestore read error for animes:", err);
@@ -21,8 +52,8 @@ export async function fetchAllAnimes(): Promise<any[]> {
   }
 }
 
-export async function saveAnimeRecord(anime: { 
-  malId: number; 
+export async function saveAnimeRecord(anime: {
+  malId: number;
   title: string;
   type?: string | null;
   source?: string | null;
@@ -42,7 +73,7 @@ export async function saveAnimeRecord(anime: {
   try {
     const docId = String(anime.malId);
     const docRef = db.collection("animes").doc(docId);
-    
+
     const updatePayload: any = {
       malId: anime.malId,
     };

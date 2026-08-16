@@ -1,9 +1,11 @@
 import { Express } from "express";
 import { fetchAllAnimes, saveAnimeRecord } from "../model/index.js";
-import { getMALAnime, searchMALAnime } from "server/controller/anime.controller.js";
-import { AnimeMediaType } from "@shared/types/anime.types.js";
+import { getMALAnime, registerNewAnime, searchMALAnime } from "server/controller/anime.controller.js";
+import { AnimeMediaType, AnimeRegistry } from "@shared/types/anime.types.js";
 
 export async function animeRoutes(app: Express) {
+    // MAL API Routes
+    // Search MAL animes
     app.get("/api/mal/anime", async (req, res) => {
         const { page, query, type } = req.query;
         const validatedPage = (Number(page) > 0) ? Number(page) : 1;
@@ -18,6 +20,7 @@ export async function animeRoutes(app: Express) {
         }
     });
 
+    // Get MAL anime details
     app.get("/api/mal/anime/:id", async (req, res) => {
         const { id } = req.params;
         if (!id) {
@@ -30,7 +33,23 @@ export async function animeRoutes(app: Express) {
             console.error("[MAL API Route] Failed to fetch anime details:", err);
             res.status(500).json({ error: `Failed to fetch anime details: ${err}` });
         }
-    })
+    });
+
+    // Database Routes
+    // Add new anime
+    app.post("/api/anime", async (req, res) => {
+        const newAnime: AnimeRegistry = req.body;
+        if (!newAnime || typeof newAnime !== "object" || Array.isArray(newAnime)) {
+            return res.status(400).json({ error: "Invalid anime data object layout." });
+        }
+        try {
+            const savedAnime = await registerNewAnime(newAnime);
+            res.status(201).json({ success: true, savedAnime });
+        } catch (err) {
+            console.error("[Anime Route] Failed to save anime to database:", err);
+            res.status(500).json({ error: `Failed to save anime to database: ${err}` });
+        }
+    });
 
     // OLD ROUTES
     app.get("/api/database/animes", async (req, res) => {

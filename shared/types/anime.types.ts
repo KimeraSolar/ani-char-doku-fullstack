@@ -3,7 +3,7 @@ export type AnimeMediaType = "tv" | "movie" | "ova" | "special";
 
 // New Anime Interface
 export interface AnimeRegistry {
-  id?: number;
+  id?: string;
   mal_id: number;
   title: string;
   image_url: string;
@@ -13,6 +13,8 @@ export interface AnimeRegistry {
   year: number | null;
   genres?: string[];
   registered_chars?: number;
+  created_at?: string;
+  updated_at?: string;
 }
 
 

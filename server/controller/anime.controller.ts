@@ -1,6 +1,6 @@
 import { AnimeMediaType, AnimeRegistry, PaginatedResponse } from "@shared/types";
 import { throwErrorResponse } from "@shared/utils";
-import { getAnimeDetails, getCached, getTopAnime, searchAnime } from "server/model";
+import { createAnime, getAnimeDetails, getCached, getTopAnime, searchAnime } from "server/model";
 
 export async function getRegisteredAnimeCount(): Promise<number | null> {
     try {
@@ -36,6 +36,16 @@ export async function getMALAnime(malId: number): Promise<AnimeRegistry | null> 
         return animeResult;
     } catch (err) {
         throwErrorResponse("[Anime Controller] Error fetching anime details on MAL API:", err);
+        return null;
+    }
+}
+
+export async function registerNewAnime(newAnime: AnimeRegistry): Promise<AnimeRegistry | null> {
+    try {
+        const savedAnime = await createAnime(newAnime);
+        return savedAnime;
+    } catch (err) {
+        throwErrorResponse("[Anime Controller] Error registering new anime:", err);
         return null;
     }
 }

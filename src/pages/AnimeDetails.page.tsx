@@ -2,14 +2,18 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom"
 import { ErrorDisplay, Loading } from "../components";
 import { AnimeRegistry } from "@shared/types";
-import { ArrowLeft, Check, Database, Star } from "lucide-react";
+import { AlertCircle, ArrowLeft, Check, CheckCircle, Database, Loader2, Star } from "lucide-react";
+import { useApp } from "../context";
 
 export default function AnimeDetailsPage() {
     const { animeId } = useParams();
     const navigate = useNavigate();
+    const { animeCount, updateAnimeCount } = useApp();
     const [loading, setLoading] = useState<boolean>(true);
     const [error, setError] = useState<boolean>(false);
     const [animeRegistry, setAnimeRegistry] = useState<AnimeRegistry>();
+    const [saving, setSaving] = useState<boolean>(false);
+    const [saveFeedback, setSaveFeedback] = useState<{ success: boolean } | null>(null);
 
     async function fetchAnimeDetails(animeId: string) {
         setLoading(true);
@@ -28,6 +32,41 @@ export default function AnimeDetailsPage() {
 
     function backToAnimesPage() {
         navigate("/browse-new?page=1");
+    }
+
+    function handleAddOrUpdateAnime(malId: number, id?: string) {
+        if (id) {
+            console.info("Skipping: Update Anime feature not implemented yet.");
+        } else {
+            addAnimeToDatabase(malId);
+        }
+    }
+
+    async function addAnimeToDatabase(malId: number): Promise<boolean> {
+        setSaving(true);
+        let success = false;
+        try {
+            const res = await fetch("/api/anime", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify(animeRegistry)
+            });
+            const json = await res.json();
+            const savedAnime = json.savedAnime;
+            success = json.success;
+            
+            setAnimeRegistry(savedAnime);
+            updateAnimeCount(animeCount + 1);
+            setSaveFeedback({ success });
+        } catch (err) {
+            console.error("Failed to add Anime to database:", err);
+            setSaveFeedback({ success });
+        } finally {
+            setSaving(false);
+            return success;
+        }
     }
 
     useEffect(() => {
@@ -72,8 +111,8 @@ export default function AnimeDetailsPage() {
 
                         <div className="space-y-1.5 flex-1">
                             {score && <div className="inline-flex items-center gap-1.5 rounded-md bg-indigo-600/15 border border-indigo-500/20 px-2 py-0.5 text-[10px] font-bold text-indigo-400">
-                               <Star className="h-2.5 w-2.5 fill-yellow-400 text-yellow-400" />
-                               {score.toFixed(2)}
+                                <Star className="h-2.5 w-2.5 fill-yellow-400 text-yellow-400" />
+                                {score.toFixed(2)}
                             </div>}
                             <h2 className="text-xl font-extrabold tracking-tight text-white sm:text-2xl font-sans">
                                 {title}
@@ -180,13 +219,31 @@ export default function AnimeDetailsPage() {
 
                     {/* Submit Action Block */}
                     <div className="flex items-center gap-4 pt-2">
-                        <button
-                            type="submit"
+                        {!saving && <button
                             disabled={Boolean(id)}
+                            onClick={() => { handleAddOrUpdateAnime(mal_id, id) }}
                             className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-bold text-sm px-5 py-2.5 shadow-sm transition-all duration-200 cursor-pointer"
                         >
                             {id ? "Added to Database" : "Add Anime"}
-                        </button>
+                        </button>}
+                        {saving && <button
+                            disabled
+                            className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-bold text-sm px-5 py-2.5 shadow-sm transition-all duration-200 cursor-pointer"
+                        >
+                            <div className="flex"><Loader2 className="h-4 w-4 animate-spin text-indigo-400 mr-2" /> Saving...</div>
+                        </button>}
+                        {saveFeedback !== null && saveFeedback.success && (
+                            <span className="text-xs font-bold text-emerald-400 flex items-center gap-1 animate-pulse">
+                                <CheckCircle className="h-4 w-4" />
+                                <span>{`Anime data ${id ? "updated" : "added"} successfully!`}</span>
+                            </span>
+                        )}
+                        {saveFeedback !== null && !saveFeedback.success && (
+                            <span className="text-xs font-bold text-rose-400 flex items-center gap-1">
+                                <AlertCircle className="h-4 w-4" />
+                                <span>{`Failed to ${id ? "update" : "add"} Anime data.`}</span>
+                            </span>
+                        )}
                     </div>
                 </div>
             </div>
