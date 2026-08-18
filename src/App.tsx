@@ -157,7 +157,7 @@ function AppContent() {
 
             {/* New Anime List views (Admin & Owner Protected) */}
             <Route
-              path="/browse-new"
+              path="/anime"
               element={
                 <AdminProtectedRoute>
                   <motion.div
@@ -174,7 +174,7 @@ function AppContent() {
             />
 
             <Route
-              path="/browse-new/:animeId"
+              path="/anime/:animeId"
               element={
                 <AdminProtectedRoute>
                   <motion.div

@@ -3,11 +3,6 @@ export interface TraitOption {
   description: string;
 }
 
-export interface TraitDefinition {
-  label: string; // Friendly name, like "Special Ability"
-  placeholder?: string;
-}
-
 export interface TraitValue {
   key: string;
   name: string;
@@ -15,7 +10,9 @@ export interface TraitValue {
 }
 
 export interface Trait {
-  id: string;
+  id?: string;
   name: string;
   values: Array<TraitValue>;
+  created_at?: string;
+  updated_at?: string;
 }

@@ -27,7 +27,7 @@ export default function AnimeCatalog({ animes, onViewAnime }: AnimeCatalogProps)
                         src={image_url}
                         alt={title}
                         referrerPolicy="no-referrer"
-                        className="h-full w-full object-cover grayscale group-hover:grayscale-0 transition-all duration-500 group-hover:scale-103"
+                        className="h-full w-full object-cover transition-all duration-500 group-hover:scale-103"
                     />
                     {/* Score badge */}
                     <div className="absolute top-3 left-3 flex flex-col gap-1.5 z-10">

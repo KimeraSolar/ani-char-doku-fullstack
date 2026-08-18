@@ -33,7 +33,9 @@ export async function fetchAllTraits(): Promise<Array<Trait>> {
       {
         id: doc._id.toString(),
         name: doc.name,
-        values: doc.values
+        values: doc.values,
+        created_at: doc.created_at,
+        updated_at: doc.updated_at
       }
     ));
     return traits;
@@ -50,7 +52,13 @@ export async function createTrait(newTrait: Trait): Promise<Trait | null> {
   }
 
   try {
-    const { id, ...traitToSave } = newTrait;
+    const dateNow = new Date().toISOString();
+    const traitToSave: Trait = {
+      name: newTrait.name,
+      values: newTrait.values,
+      created_at: dateNow,
+      updated_at: dateNow,
+    }
     const savedTrait = await traitsCollection.insertOne(traitToSave);
     return {
       id: savedTrait.insertedId.toHexString(),
@@ -105,16 +113,21 @@ export async function updateTrait(trait: Trait): Promise<Trait | null> {
   const traitsCollection = await getDBCollection(TRAIT_COL_NAME);
   const newSession = await startSession();
   try {
-  if (!traitsCollection) {
-    throw new Error("MongoDB error. Cannot update trait.");
-  }
+    if (!traitsCollection) {
+      throw new Error("MongoDB error. Cannot update trait.");
+    }
 
-  if (!newSession) {
-    throw new Error("MongoDB error. Failed to start session.");
-  }
+    if (!newSession) {
+      throw new Error("MongoDB error. Failed to start session.");
+    }
 
-    const { id, ...traitToUpdate } = trait;
-    const result = await traitsCollection.findOneAndUpdate({ _id: new ObjectId(trait.id) }, { $set: traitToUpdate }, { returnDocument: 'after', session: newSession });
+    const dateNow = new Date().toISOString();
+    const traitToUpdate: Trait = {
+      name: trait.name,
+      values: trait.values,
+      updated_at: dateNow,
+    };
+    const result = await traitsCollection.findOneAndUpdate({ _id: new ObjectId(trait.id) }, { $set: traitToUpdate }, { returnDocument: 'after', session: newSession,  });
     if (result) {
       const updatedTrait: Trait = {
         id: result._id.toHexString(),
@@ -123,9 +136,9 @@ export async function updateTrait(trait: Trait): Promise<Trait | null> {
       };
 
       const updatedOnCharacters = await updateTraitOnCharacters(updatedTrait, newSession);
-        if (!updatedOnCharacters) {
-          throw new Error("Unable to update trait on registered characters.");
-        }
+      if (!updatedOnCharacters) {
+        throw new Error("Unable to update trait on registered characters.");
+      }
 
       return updatedTrait;
     }

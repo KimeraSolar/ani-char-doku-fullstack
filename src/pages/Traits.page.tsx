@@ -156,12 +156,20 @@ export default function TraitsPage() {
             {showNewTraitForm && (<AddTraitForm onCancel={closeNewTraitForm} onSubmit={registerNewTrait} />)}
 
             {/* Traits view */}
-            {loading ? (
+            {loading && (
                 <div className="flex flex-col items-center justify-center min-h-[50vh] text-slate-400">
                     <Loader2 className="h-8 w-8 animate-spin text-indigo-400 mb-2" />
                     <p className="text-xs font-mono">Loading traits...</p>
                 </div>
-            ) : (
+            )}
+            {!loading && !traits?.length && (
+                <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-800 p-16 text-center">
+                    <p className="text-slate-500 text-sm font-medium">
+                        {"No traits found."}
+                    </p>
+                </div>
+            )}
+            {!loading && traits?.length > 0 && (
                 <div className="rounded-2xl border border-slate-855 bg-slate-900/25 p-6 space-y-6">
                     <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                         {traits.map((trait) => {
