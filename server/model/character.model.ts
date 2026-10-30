@@ -1,35 +1,32 @@
-import { getFirestoreDb } from "./firebase.model.js";
+import { getDb } from "./mongo.model.js";
 import { fetchAllAnimes, saveAnimeRecord } from "./anime.model.js";
 
 export async function saveCharacterRecordDirect(char: any): Promise<void> {
-  const db = getFirestoreDb();
+  const db = await getDb();
   if (!db) {
-    console.error("Firestore is not initialized. Cannot save character record:", char.id);
+    console.error("MongoDB is not initialized. Cannot save character record:", char.id);
     return;
   }
   try {
-    const docRef = db.collection("characters").doc(char.id);
-    await docRef.set(char);
+    await db.collection("characters").replaceOne({ _id: char.id as any }, char, { upsert: true });
   } catch (e) {
-    console.error("Firestore write error in saveCharacterRecordDirect:", char.id, e);
+    console.error("MongoDB write error in saveCharacterRecordDirect:", char.id, e);
   }
 }
 
 export async function fetchAllCharacters(): Promise<any[]> {
-  const db = getFirestoreDb();
+  const db = await getDb();
   let rawList: any[] = [];
 
   if (!db) {
-    console.error("Firestore is not initialized. Cannot fetch characters.");
+    console.error("MongoDB is not initialized. Cannot fetch characters.");
     return [];
   } else {
     try {
-      const snapshot = await db.collection("characters").get();
-      snapshot.forEach((doc) => {
-        rawList.push({ id: doc.id, ...doc.data() });
-      });
+      const docs = await db.collection("characters").find({}).toArray();
+      rawList = docs.map(({ _id, ...rest }: any) => ({ id: String(_id), ...rest }));
     } catch (err) {
-      console.error("Firestore read error for characters:", err);
+      console.error("MongoDB read error for characters:", err);
       rawList = [];
     }
   }
@@ -200,32 +197,30 @@ export async function saveCharacterRecord(newChar: any): Promise<void> {
   }
 
   // 4. Save
-  const db = getFirestoreDb();
+  const db = await getDb();
   if (!db) {
-    console.error("Firestore is not initialized. Cannot save character record:", charId);
+    console.error("MongoDB is not initialized. Cannot save character record:", charId);
     return;
   }
 
-  // Live Firestore Write
+  // Live MongoDB Write
   try {
-    const docRef = db.collection("characters").doc(charId);
-    await docRef.set(finalCharData);
+    await db.collection("characters").replaceOne({ _id: charId as any }, finalCharData, { upsert: true });
   } catch (err) {
-    console.error("Firestore save character error:", err);
+    console.error("MongoDB save character error:", err);
     throw err;
   }
 }
 
 export async function deleteCharacterRecord(id: string): Promise<void> {
-  const db = getFirestoreDb();
+  const db = await getDb();
   if (!db) {
-    console.error("Firestore is not initialized. Cannot delete character record:", id);
+    console.error("MongoDB is not initialized. Cannot delete character record:", id);
     return;
   }
 
-  // Live Firestore Delete
-  const docRef = db.collection("characters").doc(id);
-  await docRef.delete();
+  // Live MongoDB Delete
+  await db.collection("characters").deleteOne({ _id: id as any });
 }
 
 export async function batchUpdateCharacterTraits(
@@ -237,23 +232,22 @@ export async function batchUpdateCharacterTraits(
     return { updatedCount: 0 };
   }
 
-  const db = getFirestoreDb();
+  const db = await getDb();
   const idSet = new Set(characterIds.map((id) => String(id)));
 
   let rawList: any[] = [];
   if (!db) {
-    throw new Error("Firestore is not initialized. Cannot update character traits.");
+    throw new Error("MongoDB is not initialized. Cannot update character traits.");
   } else {
     try {
-      const snapshot = await db.collection("characters").get();
-      snapshot.forEach((doc) => {
-        rawList.push({ id: doc.id, ...doc.data() });
-      });
+      const docs = await db.collection("characters").find({}).toArray();
+      rawList = docs.map(({ _id, ...rest }: any) => ({ id: String(_id), ...rest }));
     } catch (err) {
-      console.error("Firestore read error for characters:", err);
+      console.error("MongoDB read error for characters:", err);
     }
   }
 
+  const bulkOps: any[] = [];
   let updatedCount = 0;
   for (const char of rawList) {
     const charIdStr = String(char.id);
@@ -322,15 +316,21 @@ export async function batchUpdateCharacterTraits(
       char.traits = updatedTraits;
       char.updatedAt = new Date().toISOString();
 
-      if (db) {
-        try {
-          const docRef = db.collection("characters").doc(char.id);
-          await docRef.set(char);
-        } catch (err) {
-          console.error("Failed to update character traits in Firestore:", err);
-        }
-      }
+      bulkOps.push({
+        updateOne: {
+          filter: { _id: char.id },
+          update: { $set: { traits: updatedTraits, updatedAt: char.updatedAt } },
+        },
+      });
       updatedCount++;
+    }
+  }
+
+  if (db && bulkOps.length > 0) {
+    try {
+      await db.collection("characters").bulkWrite(bulkOps);
+    } catch (err) {
+      console.error("Failed to update character traits in MongoDB:", err);
     }
   }
 
@@ -338,7 +338,7 @@ export async function batchUpdateCharacterTraits(
 }
 
 export async function importCharactersBatch(importedChars: any[], mode: "merge" | "overwrite"): Promise<number> {
-  const db = getFirestoreDb();
+  const db = await getDb();
   
   // Format characters
   const sanitizedImported: any[] = [];
@@ -380,34 +380,31 @@ export async function importCharactersBatch(importedChars: any[], mode: "merge" 
   }
 
   if (!db) {
-    console.error("Firestore is not initialized. Cannot import characters batch.");
+    console.error("MongoDB is not initialized. Cannot import characters batch.");
     return 0;
   }
 
-  // Live Firestore Write (Overwrite or Merge)
+  // Live MongoDB Write (Overwrite or Merge)
   if (mode === "overwrite") {
-    const snapshot = await db.collection("characters").get();
-    
-    const batch = db.batch();
-    snapshot.forEach((d) => {
-      batch.delete(d.ref);
-    });
-    await batch.commit();
+    await db.collection("characters").deleteMany({});
 
-    const batchWrite = db.batch();
-    for (const char of sanitizedImported) {
-      const docRef = db.collection("characters").doc(char.id);
-      batchWrite.set(docRef, char);
+    if (sanitizedImported.length > 0) {
+      await db.collection("characters").insertMany(
+        sanitizedImported.map((char) => ({ ...char, _id: char.id as any }))
+      );
     }
-    await batchWrite.commit();
   } else {
-    // Mode is merge - write all documents.
-    const batchWrite = db.batch();
-    for (const char of sanitizedImported) {
-      const docRef = db.collection("characters").doc(char.id);
-      batchWrite.set(docRef, char);
+    // Mode is merge - write all documents, keeping any not included in the import untouched.
+    if (sanitizedImported.length > 0) {
+      const ops = sanitizedImported.map((char) => ({
+        replaceOne: {
+          filter: { _id: char.id as any },
+          replacement: char,
+          upsert: true,
+        },
+      }));
+      await db.collection("characters").bulkWrite(ops);
     }
-    await batchWrite.commit();
   }
 
   return sanitizedImported.length;

@@ -1,21 +1,21 @@
 import { UserProfile, UserRole } from "@shared/types/index.js";
-import { getFirestoreDb } from "./firebase.model.js";
+import { getDb } from "./mongo.model.js";
 
 export async function fetchAllUsers(): Promise<UserProfile[]> {
-  const db = getFirestoreDb();
+  const db = await getDb();
   let usersList: UserProfile[] = [];
 
   if (db) {
     try {
-      const snapshot = await db.collection("users").get();
-      snapshot.forEach((docSnap) => {
-        const data = docSnap.data() as UserProfile;
-        if (data && data.uid) {
-          usersList.push(data);
+      const docs = await db.collection("users").find({}).toArray();
+      docs.forEach((doc: any) => {
+        const { _id, ...rest } = doc;
+        if (rest && rest.uid) {
+          usersList.push(rest as UserProfile);
         }
       });
     } catch (err) {
-      console.error("Failed to fetch users from Firestore:", err);
+      console.error("Failed to fetch users from MongoDB:", err);
     }
   }
 
@@ -64,14 +64,13 @@ export async function syncUserRecord(input: {
     };
   }
 
-  // Save to Firestore
-  const db = getFirestoreDb();
+  // Save to MongoDB
+  const db = await getDb();
   if (db) {
     try {
-      const userRef = db.collection("users").doc(profile.uid);
-      await userRef.set(profile, { merge: true });
+      await db.collection("users").updateOne({ _id: profile.uid as any }, { $set: profile }, { upsert: true });
     } catch (err) {
-      console.error("Failed to save user record to Firestore:", err);
+      console.error("Failed to save user record to MongoDB:", err);
     }
   }
 
@@ -87,13 +86,12 @@ export async function updateUserRole(uid: string, newRole: UserRole): Promise<Us
 
   target.role = newRole;
 
-  const db = getFirestoreDb();
+  const db = await getDb();
   if (db) {
     try {
-      const userRef = db.collection("users").doc(uid);
-      await userRef.set({ role: newRole }, { merge: true });
+      await db.collection("users").updateOne({ _id: uid as any }, { $set: { role: newRole } }, { upsert: true });
     } catch (err) {
-      console.error("Failed to update user role in Firestore:", err);
+      console.error("Failed to update user role in MongoDB:", err);
     }
   }
 
@@ -114,13 +112,12 @@ export async function updateUserBanStatus(
   target.isBanned = isBanned;
   target.banReason = banReason || "";
 
-  const db = getFirestoreDb();
+  const db = await getDb();
   if (db) {
     try {
-      const userRef = db.collection("users").doc(uid);
-      await userRef.set({ isBanned, banReason: banReason || "" }, { merge: true });
+      await db.collection("users").updateOne({ _id: uid as any }, { $set: { isBanned, banReason: banReason || "" } }, { upsert: true });
     } catch (err) {
-      console.error("Failed to update user ban status in Firestore:", err);
+      console.error("Failed to update user ban status in MongoDB:", err);
     }
   }
 

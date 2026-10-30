@@ -1,22 +1,17 @@
-import { db } from "./config.model.js";
+import { getDb } from "./mongo.model.js";
 
 export async function fetchAllAnimes(): Promise<any[]> {
+  const db = await getDb();
   if (!db) {
-    console.error("Firestore is not initialized. Cannot fetch animes.");
+    console.error("MongoDB is not initialized. Cannot fetch animes.");
     return [];
   }
 
   try {
-    const snapshot = await db.collection("animes").get();
-    const list: any[] = [];
-    
-    snapshot.forEach((doc) => {
-      list.push({ ...doc.data() });
-    });
-    
-    return list;
+    const docs = await db.collection("animes").find({}).toArray();
+    return docs.map(({ _id, ...rest }: any) => rest);
   } catch (err) {
-    console.error("Firestore read error for animes:", err);
+    console.error("MongoDB read error for animes:", err);
     return [];
   }
 }
@@ -34,15 +29,15 @@ export async function saveAnimeRecord(anime: {
   score?: number | null;
   titles?: any[] | null;
 }): Promise<void> {
+  const db = await getDb();
   if (!db) {
-    console.error("Failed to write local animes file. Firestore is not initialized.");
+    console.error("Failed to write local animes file. MongoDB is not initialized.");
     return;
   }
 
   try {
     const docId = String(anime.malId);
-    const docRef = db.collection("animes").doc(docId);
-    
+
     const updatePayload: any = {
       malId: anime.malId,
     };
@@ -57,22 +52,26 @@ export async function saveAnimeRecord(anime: {
     if (anime.score !== undefined) updatePayload.score = anime.score;
     if (anime.titles !== undefined) updatePayload.titles = anime.titles;
 
-    await docRef.set(updatePayload, { merge: true });
+    await db.collection("animes").updateOne(
+      { _id: docId as any },
+      { $set: updatePayload },
+      { upsert: true }
+    );
   } catch (err) {
-    console.error("Firestore write error for anime record:", anime.malId, err);
+    console.error("MongoDB write error for anime record:", anime.malId, err);
   }
 }
 
 export async function deleteAnimeRecord(malId: number): Promise<void> {
+  const db = await getDb();
   if (!db) {
-    console.error("Firestore is not initialized. Cannot delete anime record:", malId);
+    console.error("MongoDB is not initialized. Cannot delete anime record:", malId);
     return;
   }
 
   try {
-    const docRef = db.collection("animes").doc(String(malId));
-    await docRef.delete();
+    await db.collection("animes").deleteOne({ _id: String(malId) as any });
   } catch (err) {
-    console.error("Firestore delete error for anime record:", malId, err);
+    console.error("MongoDB delete error for anime record:", malId, err);
   }
 }

@@ -1,16 +1,15 @@
 import { DailyLeaderboardEntry, DailyPuzzleRecord, PuzzleHistoryRecord, UserProfile } from "@shared/types/index.js";
-import { getFirestoreDb, fetchAllUsers } from "./index.js";
+import { getDb, fetchAllUsers } from "./index.js";
 import { parseMatchScoreNum } from "@shared/utils/index.js";
 
 export async function savePuzzleHistoryRecord(record: PuzzleHistoryRecord): Promise<PuzzleHistoryRecord> {
-  const db = getFirestoreDb();
+  const db = await getDb();
   if (db) {
     try {
-      const docRef = db.collection("puzzle_history").doc(record.id);
-      await docRef.set(record);
-      console.log(`💾 Saved puzzle history record ${record.id} to Firestore.`);
+      await db.collection("puzzle_history").replaceOne({ _id: record.id as any }, record, { upsert: true });
+      console.log(`💾 Saved puzzle history record ${record.id} to MongoDB.`);
     } catch (err) {
-      console.error("Failed to save puzzle history record to Firestore:", err);
+      console.error("Failed to save puzzle history record to MongoDB:", err);
     }
   }
 
@@ -18,34 +17,28 @@ export async function savePuzzleHistoryRecord(record: PuzzleHistoryRecord): Prom
 }
 
 export async function fetchUserPuzzleHistory(userId: string): Promise<PuzzleHistoryRecord[]> {
-  const db = getFirestoreDb();
-  let firestoreItems: PuzzleHistoryRecord[] = [];
+  const db = await getDb();
+  let items: PuzzleHistoryRecord[] = [];
 
   if (db) {
     try {
-      const snapshot = await db.collection("puzzle_history").get();
-      snapshot.forEach((docSnap) => {
-        const data = docSnap.data() as PuzzleHistoryRecord;
-        if (data && data.userId === userId) {
-          firestoreItems.push(data);
-        }
-      });
+      const docs = await db.collection("puzzle_history").find({ userId }).toArray();
+      items = docs.map(({ _id, ...rest }: any) => rest as PuzzleHistoryRecord);
     } catch (err) {
-      console.error("Failed to fetch user puzzle history from Firestore:", err);
+      console.error("Failed to fetch user puzzle history from MongoDB:", err);
     }
   }
 
-  return firestoreItems;
+  return items;
 }
 
 export async function deletePuzzleHistoryRecord(id: string): Promise<boolean> {
-  const db = getFirestoreDb();
+  const db = await getDb();
   if (db) {
     try {
-      const docRef = db.collection("puzzle_history").doc(id);
-      await docRef.delete();
+      await db.collection("puzzle_history").deleteOne({ _id: id as any });
     } catch (err) {
-      console.error("Failed to delete puzzle history from Firestore:", err);
+      console.error("Failed to delete puzzle history from MongoDB:", err);
     }
   }
 
@@ -53,16 +46,16 @@ export async function deletePuzzleHistoryRecord(id: string): Promise<boolean> {
 }
 
 export async function fetchDailyPuzzle(date: string): Promise<DailyPuzzleRecord | null> {
-  const db = getFirestoreDb();
+  const db = await getDb();
   if (db) {
     try {
-      const docRef = db.collection("daily_puzzles").doc(date);
-      const docSnap = await docRef.get();
-      if (docSnap.exists) {
-        return docSnap.data() as DailyPuzzleRecord;
+      const doc = await db.collection("daily_puzzles").findOne({ _id: date as any });
+      if (doc) {
+        const { _id, ...rest } = doc as any;
+        return rest as DailyPuzzleRecord;
       }
     } catch (err) {
-      console.error(`Failed to fetch daily puzzle for ${date} from Firestore:`, err);
+      console.error(`Failed to fetch daily puzzle for ${date} from MongoDB:`, err);
     }
   }
 
@@ -77,13 +70,12 @@ export async function saveDailyPuzzle(date: string, puzzleCode: string, gameMode
     createdAt: new Date().toISOString(),
   };
 
-  const db = getFirestoreDb();
+  const db = await getDb();
   if (db) {
     try {
-      const docRef = db.collection("daily_puzzles").doc(date);
-      await docRef.set(record, { merge: true });
+      await db.collection("daily_puzzles").updateOne({ _id: date as any }, { $set: record }, { upsert: true });
     } catch (err) {
-      console.error(`Failed to save daily puzzle for ${date} to Firestore:`, err);
+      console.error(`Failed to save daily puzzle for ${date} to MongoDB:`, err);
     }
   }
 
@@ -91,7 +83,7 @@ export async function saveDailyPuzzle(date: string, puzzleCode: string, gameMode
 }
 
 export async function fetchDailyLeaderboard(date: string): Promise<DailyLeaderboardEntry[]> {
-  const db = getFirestoreDb();
+  const db = await getDb();
   let entriesMap = new Map<string, DailyLeaderboardEntry>();
 
   // Fetch registered users to resolve up-to-date display names / avatars
@@ -103,16 +95,16 @@ export async function fetchDailyLeaderboard(date: string): Promise<DailyLeaderbo
 
   if (db) {
     try {
-      // No firebase-admin: consultas com .where() são encadeadas diretamente no db.collection()
-      const snapshot = await db.collection("daily_leaderboards").where("date", "==", date).get();
-      snapshot.forEach((docSnap) => {
-        const data = docSnap.data() as DailyLeaderboardEntry;
+      const docs = await db.collection("daily_leaderboards").find({ date }).toArray();
+      docs.forEach((doc: any) => {
+        const { _id, ...rest } = doc;
+        const data = rest as DailyLeaderboardEntry;
         if (data && data.userId) {
-          entriesMap.set(data.id || docSnap.id, { ...data, id: data.id || docSnap.id });
+          entriesMap.set(data.id || String(_id), { ...data, id: data.id || String(_id) });
         }
       });
     } catch (err) {
-      console.error(`Failed to fetch daily leaderboard for ${date} from Firestore:`, err);
+      console.error(`Failed to fetch daily leaderboard for ${date} from MongoDB:`, err);
     }
   }
 
@@ -180,20 +172,19 @@ export async function saveDailyLeaderboardEntry(input: Omit<DailyLeaderboardEntr
     id,
   };
 
-  const db = getFirestoreDb();
+  const db = await getDb();
   if (db) {
     try {
-      const docRef = db.collection("daily_leaderboards").doc(id);
-      const existingSnap = await docRef.get();
-      if (existingSnap.exists) {
+      const existing = await db.collection("daily_leaderboards").findOne({ _id: id as any });
+      if (existing) {
         return {
           success: false,
           reason: `You already have a submitted score on the leaderboard for ${input.date}.`,
         };
       }
-      await docRef.set(fullEntry);
+      await db.collection("daily_leaderboards").insertOne({ ...fullEntry, _id: id as any });
     } catch (err) {
-      console.error("Failed to save leaderboard entry to Firestore:", err);
+      console.error("Failed to save leaderboard entry to MongoDB:", err);
     }
   }
 
@@ -201,13 +192,12 @@ export async function saveDailyLeaderboardEntry(input: Omit<DailyLeaderboardEntr
 }
 
 export async function deleteDailyLeaderboardEntry(id: string): Promise<boolean> {
-  const db = getFirestoreDb();
+  const db = await getDb();
   if (db) {
     try {
-      const docRef = db.collection("daily_leaderboards").doc(id);
-      await docRef.delete();
+      await db.collection("daily_leaderboards").deleteOne({ _id: id as any });
     } catch (err) {
-      console.error(`Failed to delete daily leaderboard entry ${id} from Firestore:`, err);
+      console.error(`Failed to delete daily leaderboard entry ${id} from MongoDB:`, err);
     }
   }
 
