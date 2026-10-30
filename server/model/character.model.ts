@@ -1,5 +1,6 @@
 import { getDb } from "./mongo.model.js";
 import { fetchAllAnimes, saveAnimeRecord } from "./anime.model.js";
+import { fetchAnimeDetails } from "../mal-proxy/index.js";
 
 export async function saveCharacterRecordDirect(char: any): Promise<void> {
   const db = await getDb();
@@ -337,24 +338,109 @@ export async function batchUpdateCharacterTraits(
   return { updatedCount };
 }
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+async function fetchAnimeFromMal(malId: number): Promise<any | null> {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const json: any = await fetchAnimeDetails(malId, `anime-full-${malId}`);
+      const a = json?.data;
+      if (!a) return null;
+      return {
+        malId,
+        title: a.title,
+        type: a.type ?? null,
+        source: a.source ?? null,
+        year: a.year ?? (a.aired?.prop?.from?.year ?? null),
+        studios: Array.isArray(a.studios) ? a.studios.map((x: any) => x.name) : [],
+        genres: Array.isArray(a.genres) ? a.genres.map((x: any) => x.name) : [],
+        images: a.images ?? null,
+        episodes: a.episodes ?? null,
+        score: a.score ?? null,
+        titles: a.titles ?? null,
+      };
+    } catch (err: any) {
+      if (/rate limit|429/i.test(String(err?.message))) {
+        await sleep(1500 * (attempt + 1));
+        continue;
+      }
+      console.error(`Failed to fetch anime ${malId} from MAL:`, err?.message || err);
+      return null;
+    }
+  }
+  return null;
+}
+
+// Resolves each imported character's anime MAL IDs and registers missing animes.
+async function ensureAnimesRegistered(entries: Map<number, string>): Promise<void> {
+  if (entries.size === 0) return;
+  const existing = new Set((await fetchAllAnimes()).map((a: any) => Number(a.malId)));
+  for (const [malId, fallbackTitle] of entries) {
+    if (existing.has(malId)) continue;
+    const details = await fetchAnimeFromMal(malId);
+    if (details) {
+      await saveAnimeRecord(details);
+      await sleep(400);
+    } else if (fallbackTitle) {
+      await saveAnimeRecord({ malId, title: fallbackTitle });
+    } else {
+      continue;
+    }
+    existing.add(malId);
+  }
+}
+
 export async function importCharactersBatch(importedChars: any[], mode: "merge" | "overwrite"): Promise<number> {
   const db = await getDb();
-  
-  // Format characters
+  if (!db) {
+    console.error("MongoDB is not initialized. Cannot import characters batch.");
+    return 0;
+  }
+
+  const registeredAnimes = await fetchAllAnimes();
+  const titleToMalId = new Map<string, number>();
+  registeredAnimes.forEach((a: any) => {
+    const id = Number(a.malId);
+    if (!id) return;
+    if (a.title) titleToMalId.set(String(a.title).trim().toLowerCase(), id);
+    if (Array.isArray(a.titles)) {
+      a.titles.forEach((t: any) => t?.title && titleToMalId.set(String(t.title).trim().toLowerCase(), id));
+    }
+  });
+
+  const animesToRegister = new Map<number, string>();
   const sanitizedImported: any[] = [];
   for (const char of importedChars) {
     if (!char || typeof char !== "object") continue;
     if (!char.name) continue;
 
     const id = char.id || `char-imported-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
-    
-    // Process sources on import
-    const rawSources = Array.isArray(char.sources) ? char.sources.map((s: any) => String(s).trim()) : [];
+
+    // Anime MAL IDs: animeSources first, then numeric sources, then legacy "source", then title lookup
     const malIds: number[] = [];
-    for (const src of rawSources) {
-      if (!src) continue;
-      malIds.push(0);
+    const addAnime = (rawId: any, title?: any) => {
+      const mId = Number(rawId);
+      if (!Number.isInteger(mId) || mId <= 0) return;
+      if (!malIds.includes(mId)) malIds.push(mId);
+      if (!animesToRegister.has(mId) || !animesToRegister.get(mId)) {
+        animesToRegister.set(mId, title ? String(title).trim() : "");
+      }
+    };
+
+    if (Array.isArray(char.animeSources)) {
+      char.animeSources.forEach((as: any) => as && addAnime(as.malId, as.title));
     }
+    if (Array.isArray(char.sources)) {
+      char.sources.forEach((s: any) => {
+        if (typeof s === "number" || (typeof s === "string" && /^\d+$/.test(s.trim()))) {
+          addAnime(s);
+        } else if (typeof s === "string") {
+          const found = titleToMalId.get(s.trim().toLowerCase());
+          if (found) addAnime(found, s);
+        }
+      });
+    }
+    if (char.source !== undefined && char.source !== null) addAnime(char.source);
 
     const defaultImgUrl = char.imageUrl ? String(char.imageUrl).trim() : "https://cdn.myanimelist.net/images/characters/failed_to_load.jpg";
     const importedImages = Array.isArray(char.images) && char.images.length > 0
@@ -364,10 +450,16 @@ export async function importCharactersBatch(importedChars: any[], mode: "merge" 
         }))
       : [{ url: defaultImgUrl, label: "Default Profile" }];
 
+    const variationTitle = (char.variationTitle && String(char.variationTitle).trim().length > 0)
+      ? String(char.variationTitle).trim()
+      : "Default";
+
+    const now = new Date().toISOString();
     sanitizedImported.push({
       id,
-      malId: typeof char.malId === "number" ? char.malId : 0,
+      malId: Number(char.malId) || 0,
       name: String(char.name).trim(),
+      variationTitle,
       imageUrl: importedImages[0]?.url || defaultImgUrl,
       images: importedImages,
       source: malIds[0] || null,
@@ -375,14 +467,12 @@ export async function importCharactersBatch(importedChars: any[], mode: "merge" 
       role: char.role ? String(char.role).trim() : "Supporting",
       traits: (char.traits && typeof char.traits === "object" && !Array.isArray(char.traits)) ? char.traits : {},
       nicknames: Array.isArray(char.nicknames) ? char.nicknames.map((n: any) => String(n).trim()) : [],
-      registeredAt: char.registeredAt || new Date().toISOString()
+      registeredAt: char.registeredAt || now,
+      updatedAt: char.updatedAt || char.registeredAt || now
     });
   }
 
-  if (!db) {
-    console.error("MongoDB is not initialized. Cannot import characters batch.");
-    return 0;
-  }
+  await ensureAnimesRegistered(animesToRegister);
 
   // Live MongoDB Write (Overwrite or Merge)
   if (mode === "overwrite") {
