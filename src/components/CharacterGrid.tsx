@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { Anime, CharacterItem, RegisteredCharacter } from "@shared/types/index";
+import { getEnglishTitle } from "@shared/utils/index";
 import { ArrowLeft, AlertCircle, ChevronLeft, ChevronRight, CheckCircle, Pencil, Database, Check, ChevronDown, Zap, Sliders, X, ZoomIn, FileImage, Plus } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useNavigate, useParams, useLocation, useSearchParams } from "react-router-dom";
@@ -100,8 +101,12 @@ export default function CharacterGrid({ dbCharacters, dbAnimes = [], onRefresh }
     if (!anime) return [];
     const options: { title: string; type: string }[] = [];
     
-    // Add default title first if it exists
-    if (anime.title) {
+    // Add default (English) title first, then the original MAL title and other alternatives
+    const englishTitle = getEnglishTitle(anime);
+    if (englishTitle) {
+      options.push({ title: englishTitle, type: "English" });
+    }
+    if (anime.title && !options.some(o => o.title.toLowerCase() === anime.title.toLowerCase())) {
       options.push({ title: anime.title, type: "Default" });
     }
     
@@ -146,7 +151,7 @@ export default function CharacterGrid({ dbCharacters, dbAnimes = [], onRefresh }
         setSelectedStudios(registeredAnime.studios || []);
         setSelectedGenres(registeredAnime.genres || []);
       } else {
-        setFormTitle(anime.title || "");
+        setFormTitle(getEnglishTitle(anime));
         setIncludeType(!!anime.type);
         setTypeValue(anime.type || "");
         setIncludeSource(!!anime.source);
@@ -172,7 +177,7 @@ export default function CharacterGrid({ dbCharacters, dbAnimes = [], onRefresh }
 
     const payload = {
       malId: anime.mal_id,
-      title: formTitle || anime.title,
+      title: formTitle || getEnglishTitle(anime),
       type: includeType ? typeValue : null,
       source: includeSource ? sourceValue : null,
       year: includeYear ? yearValue : null,
@@ -312,7 +317,11 @@ export default function CharacterGrid({ dbCharacters, dbAnimes = [], onRefresh }
 
   // Registered characters specifically associated with this anime
   const dbCharsForAnime = useMemo(() => {
-    const animeTitleLower = anime?.title?.toLowerCase() || registeredAnime?.title?.toLowerCase();
+    const animeTitleCandidates = [
+      anime ? getEnglishTitle(anime) : "",
+      anime?.title || "",
+      registeredAnime?.title || "",
+    ].map(t => t.toLowerCase().trim()).filter(Boolean);
     return dbCharacters.filter(c => {
       if (Array.isArray((c as any).animeSources)) {
         if ((c as any).animeSources.some((as: any) => Number(as.malId) === Number(animeId))) return true;
@@ -321,7 +330,7 @@ export default function CharacterGrid({ dbCharacters, dbAnimes = [], onRefresh }
         return c.sources.some(s => {
           const mId = typeof s === "number" ? s : Number(s);
           if (!isNaN(mId) && mId === Number(animeId)) return true;
-          if (typeof s === "string" && animeTitleLower && s.toLowerCase().trim() === animeTitleLower) return true;
+          if (typeof s === "string" && animeTitleCandidates.includes(s.toLowerCase().trim())) return true;
           return false;
         });
       }
@@ -431,13 +440,13 @@ export default function CharacterGrid({ dbCharacters, dbAnimes = [], onRefresh }
     setQuickAddingId(malId);
     setQuickAddFeedback(null);
 
-    const animeTitle = anime?.title || registeredAnime?.title || "";
+    const animeTitle = anime ? getEnglishTitle(anime) : registeredAnime?.title || "";
     const animeSourcesList: any[] = [];
 
     if (anime) {
       animeSourcesList.push({
         malId: Number(anime.mal_id),
-        title: anime.title,
+        title: getEnglishTitle(anime),
         titles: anime.titles || null,
         type: anime.type || null,
         source: anime.source || null,

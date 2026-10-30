@@ -1,6 +1,7 @@
 import { getDb } from "./mongo.model.js";
 import { fetchAllAnimes, saveAnimeRecord } from "./anime.model.js";
 import { fetchAnimeDetails } from "../mal-proxy/index.js";
+import { getEnglishTitle } from "@shared/utils/index.js";
 
 export async function saveCharacterRecordDirect(char: any): Promise<void> {
   const db = await getDb();
@@ -348,7 +349,7 @@ async function fetchAnimeFromMal(malId: number): Promise<any | null> {
       if (!a) return null;
       return {
         malId,
-        title: a.title,
+        title: getEnglishTitle(a),
         type: a.type ?? null,
         source: a.source ?? null,
         year: a.year ?? (a.aired?.prop?.from?.year ?? null),
