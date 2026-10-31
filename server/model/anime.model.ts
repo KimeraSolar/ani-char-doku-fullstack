@@ -75,3 +75,44 @@ export async function deleteAnimeRecord(malId: number): Promise<void> {
     console.error("MongoDB delete error for anime record:", malId, err);
   }
 }
+
+// Removes the anime and cascades to its characters: characters only linked to this anime are deleted,
+// while characters linked to other animes keep their record and just lose this anime from `sources`.
+export async function deleteAnimeWithCharacters(malId: number): Promise<{ deletedCharacters: number; updatedCharacters: number }> {
+  const db = await getDb();
+  if (!db) {
+    throw new Error("MongoDB is not initialized. Cannot delete anime.");
+  }
+
+  const id = Number(malId);
+  const characters = db.collection("characters");
+  const linkedDocs = await characters.find({ sources: { $in: [id, String(id)] } }).toArray();
+
+  const idsToDelete: string[] = [];
+  let updatedCharacters = 0;
+
+  for (const doc of linkedDocs) {
+    const remainingSources = (Array.isArray(doc.sources) ? doc.sources : []).filter((s: any) => Number(s) !== id);
+    const hasOtherAnime = remainingSources.some((s: any) => Number(s) > 0);
+
+    if (!hasOtherAnime) {
+      idsToDelete.push(String(doc._id));
+      continue;
+    }
+
+    const update: any = { sources: remainingSources, updatedAt: new Date().toISOString() };
+    if (Number(doc.source) === id) {
+      update.source = remainingSources[0] ?? null;
+    }
+    await characters.updateOne({ _id: doc._id }, { $set: update });
+    updatedCharacters++;
+  }
+
+  if (idsToDelete.length > 0) {
+    await characters.deleteMany({ _id: { $in: idsToDelete as any[] } });
+  }
+
+  await db.collection("animes").deleteOne({ _id: String(id) as any });
+
+  return { deletedCharacters: idsToDelete.length, updatedCharacters };
+}
