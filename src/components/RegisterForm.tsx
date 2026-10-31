@@ -1,5 +1,33 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Anime } from "@shared/types/index";
+import { getEnglishTitle } from "@shared/utils/index";
+
+// The character endpoint's "anime" entries only carry the default title, so fetch each anime's
+// full details to get title_english/titles.
+async function enrichLinkedAnime(list: any[]): Promise<any[]> {
+  return Promise.all(
+    list.map(async (item) => {
+      const id = item?.anime?.mal_id;
+      if (!id) return item;
+      try {
+        const res = await fetch(`/api/proxy/anime/${id}`);
+        if (!res.ok) return item;
+        const full = (await res.json())?.data;
+        if (!full) return item;
+        return {
+          ...item,
+          anime: {
+            ...item.anime,
+            title_english: full.title_english ?? null,
+            titles: full.titles ?? item.anime.titles,
+          },
+        };
+      } catch {
+        return item;
+      }
+    })
+  );
+}
 import { ArrowLeft, Save, Sparkles, ShieldAlert, Sliders, Check, ZoomIn, X, Upload, Plus, Trash2, ChevronLeft, ChevronRight, FileImage } from "lucide-react";
 import TraitsForm from "./TraitsForm";
 import { motion, AnimatePresence } from "motion/react";
@@ -75,6 +103,7 @@ export default function RegisterForm(props: Partial<RegisterFormProps>) {
                     ...loadedChar,
                     apiNicknames,
                     apiSources,
+                    apiAnime: await enrichLinkedAnime(jData.data.anime || []),
                   };
                 } else {
                   loadedChar = {
@@ -122,6 +151,7 @@ export default function RegisterForm(props: Partial<RegisterFormProps>) {
                   ...data.data,
                   apiNicknames,
                   apiSources,
+                  apiAnime: await enrichLinkedAnime(data.data.anime || []),
                 };
               }
             }
@@ -1031,17 +1061,32 @@ function RegisterFormInner({
     return trimmed;
   }, [dbAnimes, character, chromeAnime]);
 
-  // 4. Source multiselect: Default populated with union of database sources, API sources, chromeAnime title, and registered DB animes
-  const rawInitialSources = Array.from(new Set([
-    ...(character?.sources || []),
-    ...(character?.apiSources || []),
-    ...(chromeAnime?.title ? [chromeAnime.title] : []),
-    ...(Array.isArray(dbAnimes) ? dbAnimes.map((a: any) => a.title) : []),
-  ])).filter(Boolean) as string[];
+  // 4. Source multiselect: only the anime this character is linked to (Tenrai "anime" array), shown by English title
+  const linkedAnimeList: any[] = Array.isArray(character?.apiAnime) ? character.apiAnime : [];
+  const linkedSourceOptions: string[] = Array.from(new Set(
+    linkedAnimeList.map((item: any) => (item?.anime ? getEnglishTitle(item.anime) : "")).filter(Boolean)
+  ));
 
-  const initialSources = Array.from(new Set(rawInitialSources.map((s) => getCanonicalTitle(s)))).filter(Boolean);
+  // Maps a stored source (English, MAL default or alternative title) to the linked anime's English title
+  const resolveLinkedSourceTitle = (raw: string): string => {
+    const trimmed = String(raw || "").trim();
+    const lowered = trimmed.toLowerCase();
+    for (const item of linkedAnimeList) {
+      const a = item?.anime;
+      if (!a) continue;
+      const english = getEnglishTitle(a);
+      const names = [
+        a.title,
+        a.title_english,
+        english,
+        ...(Array.isArray(a.titles) ? a.titles.map((t: any) => t?.title) : []),
+      ];
+      if (names.some((n) => n && String(n).trim().toLowerCase() === lowered)) return english;
+    }
+    return trimmed;
+  };
 
-  const [allAvailableSources, setAllAvailableSources] = useState<string[]>(initialSources);
+  const [allAvailableSources, setAllAvailableSources] = useState<string[]>(linkedSourceOptions);
   const [selectedSources, setSelectedSources] = useState<string[]>(() => {
     let rawSelected: string[] = [];
     if (isEdit && character?.sources !== undefined) {
@@ -1051,26 +1096,15 @@ function RegisterFormInner({
     } else if (chromeAnime?.title) {
       rawSelected = [chromeAnime.title];
     } else {
-      rawSelected = rawInitialSources;
+      rawSelected = linkedSourceOptions;
     }
-    return Array.from(new Set(rawSelected.map((s) => getCanonicalTitle(s)))).filter(Boolean);
+    return Array.from(new Set(rawSelected.map(resolveLinkedSourceTitle))).filter(Boolean);
   });
   const [customSourceInput, setCustomSourceInput] = useState("");
 
   // Sync state if character, chromeAnime, or dbAnimes is updated asynchronously
   useEffect(() => {
-    const freshRawSources = Array.from(new Set([
-      ...(character?.sources || []),
-      ...(character?.apiSources || []),
-      ...(chromeAnime?.title ? [chromeAnime.title] : []),
-      ...(Array.isArray(dbAnimes) ? dbAnimes.map((a: any) => a.title) : []),
-    ])).filter(Boolean) as string[];
-
-    const canonicalSources = Array.from(
-      new Set(freshRawSources.map((s) => getCanonicalTitle(s)))
-    ).filter(Boolean);
-
-    setAllAvailableSources(canonicalSources);
+    setAllAvailableSources(linkedSourceOptions);
 
     let freshSelectedRaw: string[] = [];
     if (isEdit && character?.sources !== undefined) {
@@ -1080,15 +1114,15 @@ function RegisterFormInner({
     } else if (chromeAnime?.title) {
       freshSelectedRaw = [chromeAnime.title];
     } else {
-      freshSelectedRaw = freshRawSources;
+      freshSelectedRaw = linkedSourceOptions;
     }
 
-    const canonicalSelected = Array.from(
-      new Set(freshSelectedRaw.map((s) => getCanonicalTitle(s)))
+    const resolvedSelected = Array.from(
+      new Set(freshSelectedRaw.map(resolveLinkedSourceTitle))
     ).filter(Boolean);
 
-    setSelectedSources(canonicalSelected);
-  }, [character, chromeAnime, isEdit, dbAnimes, getCanonicalTitle]);
+    setSelectedSources(resolvedSelected);
+  }, [character, chromeAnime, isEdit, dbAnimes]);
 
   // 5. Custom Traits fields: start with some fun defaults
   const [traits, setTraits] = useState<Record<string, string | string[]>>(
@@ -1808,7 +1842,7 @@ function RegisterFormInner({
                   <span className="text-[10px] font-semibold text-slate-550">Checkbox selection</span>
                 </label>
                 <p className="text-xs text-slate-400 font-semibold">
-                  Select anime versions/titles where this character appears, sourced from MAL's titles:
+                  Select the anime this character appears in (English titles):
                 </p>
 
                 {/* Checklist options */}

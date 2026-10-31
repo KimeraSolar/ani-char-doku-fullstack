@@ -1,13 +1,13 @@
 import { Express } from "express";
-import { getFirebaseStatus } from "../model/index.js";
+import { getDatabaseStatus } from "../model/index.js";
 
 export async function firebaseRoutes(app: Express) {
-    // Firebase status API
-    app.get("/api/firebase-status", (_, res) => {
+    // Database (MongoDB) status API
+    app.get("/api/firebase-status", async (_, res) => {
         try {
-            res.json(getFirebaseStatus());
+            res.json(await getDatabaseStatus());
         } catch (err) {
-            res.status(500).json({ error: "Failed to determine Firebase status." });
+            res.status(500).json({ error: "Failed to determine database status." });
         }
     });
 }

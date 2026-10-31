@@ -382,7 +382,7 @@ export default function TraitsConfigView({ characters, onRefreshCharacters, fire
                 <span className={`h-1.5 w-1.5 rounded-full ${
                   firebaseStatus.isConfigured ? "bg-emerald-450 animate-pulse" : "bg-amber-400"
                 }`} />
-                {firebaseStatus.isConfigured ? "Cloud Firestore Live" : "Local Data Fallback"}
+                {firebaseStatus.isConfigured ? "Cloud Database Live" : "Local Data Fallback"}
               </span>
             )}
           </h2>

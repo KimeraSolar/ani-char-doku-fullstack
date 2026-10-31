@@ -1,5 +1,5 @@
 import { Express } from "express";
-import { fetchAllAnimes, saveAnimeRecord } from "../model/index.js";
+import { deleteAnimeWithCharacters, fetchAllAnimes, saveAnimeRecord } from "../model/index.js";
 
 export async function animeRoutes(app: Express) {
     app.get("/api/database/animes", async (req, res) => {
@@ -23,6 +23,24 @@ export async function animeRoutes(app: Express) {
         } catch (err) {
             console.error("Failed to save anime record:", err);
             res.status(500).json({ error: "Failed to save anime record." });
+        }
+    });
+
+    app.delete("/api/database/animes/:malId", async (req, res) => {
+        try {
+            const malId = Number(req.params.malId);
+            if (!Number.isInteger(malId) || malId <= 0) {
+                return res.status(400).json({ error: "Invalid anime malId." });
+            }
+            const result = await deleteAnimeWithCharacters(malId);
+            res.json({
+                success: true,
+                ...result,
+                message: `Anime removed from registry. ${result.deletedCharacters} characters deleted, ${result.updatedCharacters} characters updated.`,
+            });
+        } catch (err) {
+            console.error("Failed to delete anime record:", err);
+            res.status(500).json({ error: "Failed to delete anime record." });
         }
     });
 }

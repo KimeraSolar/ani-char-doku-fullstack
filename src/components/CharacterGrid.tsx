@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { Anime, CharacterItem, RegisteredCharacter } from "@shared/types/index";
-import { ArrowLeft, AlertCircle, ChevronLeft, ChevronRight, CheckCircle, Pencil, Database, Check, ChevronDown, Zap, Sliders, X, ZoomIn, FileImage, Plus } from "lucide-react";
+import { getEnglishTitle } from "@shared/utils/index";
+import { ArrowLeft, AlertCircle, ChevronLeft, ChevronRight, CheckCircle, Pencil, Database, Check, ChevronDown, Zap, Sliders, X, ZoomIn, FileImage, Plus, Trash2 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useNavigate, useParams, useLocation, useSearchParams } from "react-router-dom";
 
@@ -100,8 +101,12 @@ export default function CharacterGrid({ dbCharacters, dbAnimes = [], onRefresh }
     if (!anime) return [];
     const options: { title: string; type: string }[] = [];
     
-    // Add default title first if it exists
-    if (anime.title) {
+    // Add default (English) title first, then the original MAL title and other alternatives
+    const englishTitle = getEnglishTitle(anime);
+    if (englishTitle) {
+      options.push({ title: englishTitle, type: "English" });
+    }
+    if (anime.title && !options.some(o => o.title.toLowerCase() === anime.title.toLowerCase())) {
       options.push({ title: anime.title, type: "Default" });
     }
     
@@ -132,6 +137,9 @@ export default function CharacterGrid({ dbCharacters, dbAnimes = [], onRefresh }
   const [savingAnime, setSavingAnime] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [showDeleteAnimeConfirm, setShowDeleteAnimeConfirm] = useState(false);
+  const [deletingAnime, setDeletingAnime] = useState(false);
+  const [deleteAnimeError, setDeleteAnimeError] = useState<string | null>(null);
 
   useEffect(() => {
     if (anime) {
@@ -146,7 +154,7 @@ export default function CharacterGrid({ dbCharacters, dbAnimes = [], onRefresh }
         setSelectedStudios(registeredAnime.studios || []);
         setSelectedGenres(registeredAnime.genres || []);
       } else {
-        setFormTitle(anime.title || "");
+        setFormTitle(getEnglishTitle(anime));
         setIncludeType(!!anime.type);
         setTypeValue(anime.type || "");
         setIncludeSource(!!anime.source);
@@ -172,7 +180,7 @@ export default function CharacterGrid({ dbCharacters, dbAnimes = [], onRefresh }
 
     const payload = {
       malId: anime.mal_id,
-      title: formTitle || anime.title,
+      title: formTitle || getEnglishTitle(anime),
       type: includeType ? typeValue : null,
       source: includeSource ? sourceValue : null,
       year: includeYear ? yearValue : null,
@@ -207,6 +215,32 @@ export default function CharacterGrid({ dbCharacters, dbAnimes = [], onRefresh }
       setSaveError(err.message || "An error occurred.");
     } finally {
       setSavingAnime(false);
+    }
+  };
+
+  const handleDeleteAnime = async () => {
+    if (!anime) return;
+    setDeletingAnime(true);
+    setDeleteAnimeError(null);
+
+    try {
+      const response = await fetch(`/api/database/animes/${anime.mal_id}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to delete anime from registry.");
+      }
+
+      setShowDeleteAnimeConfirm(false);
+      if (onRefresh) {
+        onRefresh();
+      }
+    } catch (err: any) {
+      console.error("Delete anime registry error:", err);
+      setDeleteAnimeError(err.message || "An error occurred.");
+    } finally {
+      setDeletingAnime(false);
     }
   };
 
@@ -312,7 +346,11 @@ export default function CharacterGrid({ dbCharacters, dbAnimes = [], onRefresh }
 
   // Registered characters specifically associated with this anime
   const dbCharsForAnime = useMemo(() => {
-    const animeTitleLower = anime?.title?.toLowerCase() || registeredAnime?.title?.toLowerCase();
+    const animeTitleCandidates = [
+      anime ? getEnglishTitle(anime) : "",
+      anime?.title || "",
+      registeredAnime?.title || "",
+    ].map(t => t.toLowerCase().trim()).filter(Boolean);
     return dbCharacters.filter(c => {
       if (Array.isArray((c as any).animeSources)) {
         if ((c as any).animeSources.some((as: any) => Number(as.malId) === Number(animeId))) return true;
@@ -321,7 +359,7 @@ export default function CharacterGrid({ dbCharacters, dbAnimes = [], onRefresh }
         return c.sources.some(s => {
           const mId = typeof s === "number" ? s : Number(s);
           if (!isNaN(mId) && mId === Number(animeId)) return true;
-          if (typeof s === "string" && animeTitleLower && s.toLowerCase().trim() === animeTitleLower) return true;
+          if (typeof s === "string" && animeTitleCandidates.includes(s.toLowerCase().trim())) return true;
           return false;
         });
       }
@@ -431,13 +469,13 @@ export default function CharacterGrid({ dbCharacters, dbAnimes = [], onRefresh }
     setQuickAddingId(malId);
     setQuickAddFeedback(null);
 
-    const animeTitle = anime?.title || registeredAnime?.title || "";
+    const animeTitle = anime ? getEnglishTitle(anime) : registeredAnime?.title || "";
     const animeSourcesList: any[] = [];
 
     if (anime) {
       animeSourcesList.push({
         malId: Number(anime.mal_id),
-        title: anime.title,
+        title: getEnglishTitle(anime),
         titles: anime.titles || null,
         type: anime.type || null,
         source: anime.source || null,
@@ -827,6 +865,21 @@ export default function CharacterGrid({ dbCharacters, dbAnimes = [], onRefresh }
               >
                 {savingAnime ? "Saving..." : isRegistered ? "Update Properties" : "Register Anime"}
               </button>
+              {isRegistered && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDeleteAnimeError(null);
+                    setShowDeleteAnimeConfirm(true);
+                  }}
+                  disabled={savingAnime || deletingAnime}
+                  title="Delete from Database"
+                  aria-label="Delete from Database"
+                  className="inline-flex items-center justify-center rounded-xl border border-rose-900/50 bg-rose-950/30 hover:bg-rose-900/40 disabled:opacity-50 text-rose-400 p-2.5 shadow-sm transition-all duration-200 cursor-pointer"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              )}
               {saveSuccess && (
                 <span className="text-xs font-bold text-emerald-400 flex items-center gap-1 animate-pulse">
                   <CheckCircle className="h-4 w-4" />
@@ -1074,6 +1127,59 @@ export default function CharacterGrid({ dbCharacters, dbAnimes = [], onRefresh }
           )}
         </>
       )}
+
+      {/* Delete Anime Confirmation Modal */}
+      <AnimatePresence>
+        {showDeleteAnimeConfirm && anime && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 p-4 backdrop-blur-xs">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900 p-6 space-y-5 shadow-2xl"
+            >
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-red-500/10 text-red-500 border border-red-500/20">
+                <Trash2 className="h-5 w-5" />
+              </div>
+
+              <div className="space-y-2">
+                <h3 className="text-base font-black text-white font-sans">Delete Registered Anime?</h3>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  You are about to delete <strong className="text-red-400">"{anime.title}"</strong> from the database.
+                </p>
+                <div className="rounded-xl bg-red-950/30 border border-red-900/40 p-3 text-[11px] font-bold text-red-300 leading-relaxed">
+                  ⚠️ Characters that only appear in this anime will be permanently deleted. Characters linked to other animes will be kept, and only this anime will be removed from their sources. This action is irreversible.
+                </div>
+                {deleteAnimeError && (
+                  <p className="text-xs font-bold text-rose-400 flex items-center gap-1">
+                    <AlertCircle className="h-4 w-4" />
+                    <span>{deleteAnimeError}</span>
+                  </p>
+                )}
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteAnimeConfirm(false)}
+                  disabled={deletingAnime}
+                  className="flex-1 rounded-xl border border-slate-800 bg-slate-900 py-2.5 text-xs font-bold text-slate-300 hover:bg-slate-800 disabled:opacity-50 cursor-pointer"
+                >
+                  Back
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDeleteAnime}
+                  disabled={deletingAnime}
+                  className="flex-1 rounded-xl bg-red-600 hover:bg-red-500 disabled:opacity-50 py-2.5 text-xs font-black text-white shadow-lg shadow-red-600/15 cursor-pointer"
+                >
+                  {deletingAnime ? "Deleting..." : "Confirm Deletion"}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Image Zoom Modal */}
       <AnimatePresence>

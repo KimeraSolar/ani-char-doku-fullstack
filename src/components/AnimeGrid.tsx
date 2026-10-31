@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Anime, RegisteredCharacter } from "@shared/types/index";
+import { getEnglishTitle } from "@shared/utils/index";
 import { ArrowLeft, ArrowRight, Star, Disc, Search, AlertCircle, Check, Database } from "lucide-react";
 import { motion } from "motion/react";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -301,6 +302,7 @@ export default function AnimeGrid({ dbCharacters, dbAnimes = [] }: AnimeGridProp
 
               const registeredAnime = dbAnimes.find((a) => a.malId === anime.mal_id);
               const isAnimeInDb = !!registeredAnime;
+              const displayTitle = getEnglishTitle(anime);
 
               return (
                 <motion.div
@@ -314,7 +316,7 @@ export default function AnimeGrid({ dbCharacters, dbAnimes = [] }: AnimeGridProp
                   <div className="relative aspect-3/4 w-full overflow-hidden bg-slate-950/80">
                     <img
                       src={anime.images.jpg.large_image_url || anime.images.jpg.image_url}
-                      alt={anime.title}
+                      alt={displayTitle}
                       referrerPolicy="no-referrer"
                       className="h-full w-full object-cover grayscale group-hover:grayscale-0 transition-all duration-500 group-hover:scale-103"
                     />
@@ -355,8 +357,8 @@ export default function AnimeGrid({ dbCharacters, dbAnimes = [] }: AnimeGridProp
 
                   {/* Content Details */}
                   <div className="flex flex-1 flex-col p-4">
-                    <h3 className="line-clamp-2 text-sm font-bold text-slate-100 group-hover:text-indigo-400 transition-colors font-sans" title={anime.title}>
-                      {anime.title}
+                    <h3 className="line-clamp-2 text-sm font-bold text-slate-100 group-hover:text-indigo-400 transition-colors font-sans" title={displayTitle}>
+                      {displayTitle}
                     </h3>
                     
                     <div className="mt-1 flex items-center space-x-2 text-[11px] font-semibold text-slate-500">

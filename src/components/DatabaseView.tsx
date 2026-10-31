@@ -605,9 +605,9 @@ export default function DatabaseView({
         <div className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-4 flex gap-3 text-sm text-amber-200/90 leading-relaxed shadow-sm">
           <AlertCircle className="h-5 w-5 text-amber-400 shrink-0 mt-0.5" />
           <div>
-            <p className="font-bold text-amber-300">Firebase Firestore is falling back to local database file</p>
+            <p className="font-bold text-amber-300">MongoDB is falling back to local database file</p>
             <p className="mt-0.5 text-xs text-amber-400/85">
-              The application is currently running using local JSON storage. To connect with a cloud-hosted database, please configure your Firestore credentials inside your workspace's <code className="bg-amber-500/10 px-1 py-0.5 rounded font-mono text-amber-300">.env</code> file (keys: <code className="bg-amber-500/15 px-1 py-0.5 rounded font-mono text-amber-350">FIREBASE_PROJECT_ID</code>, <code className="bg-amber-500/15 px-1 py-0.5 rounded font-mono text-amber-350">FIREBASE_API_KEY</code>, etc.). Once defined, the applet will automatically synchronize over the Cloud!
+              The application is currently running using local JSON storage. To connect with a cloud-hosted database, please configure your MongoDB credentials inside your workspace's <code className="bg-amber-500/10 px-1 py-0.5 rounded font-mono text-amber-300">.env</code> file (keys: <code className="bg-amber-500/15 px-1 py-0.5 rounded font-mono text-amber-350">MONGODB_URI</code>, <code className="bg-amber-500/15 px-1 py-0.5 rounded font-mono text-amber-350">MONGODB_DATABASE</code>, etc.). Once defined, the applet will automatically synchronize over the Cloud!
             </p>
           </div>
         </div>
@@ -638,7 +638,7 @@ export default function DatabaseView({
                 <span className={`h-1.5 w-1.5 rounded-full ${
                   firebaseStatus.isConfigured ? "bg-emerald-450 animate-pulse" : "bg-amber-400"
                 }`} />
-                {firebaseStatus.isConfigured ? "Cloud Firestore Live" : "Local Data Fallback"}
+                {firebaseStatus.isConfigured ? "Cloud Database Live" : "Local Data Fallback"}
               </span>
             )}
           </h2>
