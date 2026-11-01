@@ -128,30 +128,40 @@ async function apiRoutes(app2) {
   });
 }
 
-// server/model/firebase.model.ts
-import { getApps as getApps2, initializeApp as initializeApp2 } from "firebase-admin/app";
-import { getFirestore as getFirestore2 } from "firebase-admin/firestore";
-
-// server/model/config.model.ts
-import { initializeApp, getApps, cert } from "firebase-admin/app";
-import { getFirestore } from "firebase-admin/firestore";
-if (!getApps().length) {
-  initializeApp({
-    credential: cert({
-      projectId: process.env.FIREBASE_PROJECT_ID,
-      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-      privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n")
-    })
-  });
-}
-var db = getFirestore();
-
-// server/model/firebase.model.ts
-var appInstance = null;
+// server/model/mongo.model.ts
+import { MongoClient } from "mongodb";
+var client = null;
 var dbInstance = null;
-var triedInitialization = false;
-function getFirebaseStatus() {
-  const hasConfig = !!(process.env.FIRESTORE_PROJECT_ID && process.env.FIRESTORE_API_KEY);
+var connectingPromise = null;
+async function getDb() {
+  if (dbInstance) return dbInstance;
+  if (connectingPromise) return connectingPromise;
+  const uri = process.env.MONGODB_URI;
+  const dbName = process.env.MONGODB_DATABASE;
+  if (!uri || !dbName) {
+    console.warn("\u26A0\uFE0F MongoDB environment variables are not fully configured.");
+    return null;
+  }
+  connectingPromise = (async () => {
+    try {
+      client = new MongoClient(uri, { maxPoolSize: 10 });
+      await client.connect();
+      dbInstance = client.db(dbName);
+      console.log(`\u26A1 Successfully connected to MongoDB database "${dbName}".`);
+      return dbInstance;
+    } catch (err) {
+      console.error("\u274C Failed to connect to MongoDB:", err);
+      client = null;
+      dbInstance = null;
+      return null;
+    } finally {
+      connectingPromise = null;
+    }
+  })();
+  return connectingPromise;
+}
+async function getDatabaseStatus() {
+  const hasConfig = !!(process.env.MONGODB_URI && process.env.MONGODB_DATABASE);
   if (!hasConfig) {
     return {
       isConfigured: false,
@@ -159,6 +169,7 @@ function getFirebaseStatus() {
     };
   }
   try {
+    const db = await getDb();
     return {
       isConfigured: !!db,
       usingFallback: !db
@@ -171,76 +182,96 @@ function getFirebaseStatus() {
     };
   }
 }
-function getFirestoreDb() {
-  if (dbInstance) return dbInstance;
-  if (triedInitialization && !appInstance) return null;
-  triedInitialization = true;
-  const apiKey = process.env.FIRESTORE_API_KEY;
-  const authDomain = process.env.FIRESTORE_AUTH_DOMAIN;
-  const projectId = process.env.FIRESTORE_PROJECT_ID;
-  const storageBucket = process.env.FIRESTORE_STORAGE_BUCKET;
-  const messagingSenderId = process.env.FIRESTORE_MESSAGING_SENDER_ID;
-  const appId = process.env.FIRESTORE_APP_ID;
-  const measurementId = process.env.FIRESTORE_MEASUREMENT_ID;
-  const firestoreDatabaseId = process.env.FIRESTORE_DATABASE_ID;
-  if (!projectId || !apiKey) {
-    console.warn("\u26A0\uFE0F Firebase environment variables are not fully configured.");
-    return null;
-  }
-  const firebaseConfig = {
-    apiKey,
-    authDomain,
-    projectId,
-    storageBucket,
-    messagingSenderId,
-    appId,
-    measurementId
-  };
+
+// server/model/blob.model.ts
+import { randomUUID } from "node:crypto";
+import { del, put } from "@vercel/blob";
+var DATA_URL_PATTERN = /^data:([\w.+-]+\/[\w.+-]+);base64,(.+)$/s;
+var BLOB_HOST_SUFFIX = ".blob.vercel-storage.com";
+function isBlobUrl(url) {
   try {
-    if (getApps2().length === 0) {
-      appInstance = initializeApp2(firebaseConfig);
-    } else {
-      appInstance = getApps2()[0];
+    return new URL(url).hostname.endsWith(BLOB_HOST_SUFFIX);
+  } catch {
+    return false;
+  }
+}
+async function uploadImageBuffer(buffer, contentType) {
+  const ext = contentType.split("/")[1]?.replace("jpeg", "jpg") || "bin";
+  const blob = await put(`characters/${randomUUID()}.${ext}`, buffer, {
+    access: "public",
+    contentType
+  });
+  return blob.url;
+}
+async function externalizeImageUrl(url, cache = /* @__PURE__ */ new Map()) {
+  if (!url.startsWith("data:")) return url;
+  const cached = cache.get(url);
+  if (cached) return cached;
+  const match = DATA_URL_PATTERN.exec(url);
+  if (!match) throw new Error("Invalid image data URL.");
+  const blobUrl = await uploadImageBuffer(Buffer.from(match[2], "base64"), match[1]);
+  cache.set(url, blobUrl);
+  return blobUrl;
+}
+async function externalizeCharacterImages(char, cache = /* @__PURE__ */ new Map()) {
+  const images = Array.isArray(char.images) ? await Promise.all(char.images.map(async (img) => ({ ...img, url: await externalizeImageUrl(img.url, cache) }))) : char.images;
+  const imageUrl = char.imageUrl ? await externalizeImageUrl(char.imageUrl, cache) : char.imageUrl;
+  return { ...char, images, imageUrl };
+}
+function collectBlobUrls(docs) {
+  const urls = /* @__PURE__ */ new Set();
+  for (const doc of docs) {
+    if (!doc) continue;
+    if (typeof doc.imageUrl === "string" && isBlobUrl(doc.imageUrl)) urls.add(doc.imageUrl);
+    if (Array.isArray(doc.images)) {
+      for (const img of doc.images) {
+        if (typeof img?.url === "string" && isBlobUrl(img.url)) urls.add(img.url);
+      }
     }
-    if (firestoreDatabaseId) {
-      dbInstance = getFirestore2(appInstance, firestoreDatabaseId);
-    } else {
-      dbInstance = getFirestore2(appInstance);
-    }
-    console.log(`\u26A1 Successfully initialized Cloud Firestore database "${firestoreDatabaseId || "(default)"}" with live connection.`);
-    return dbInstance;
+  }
+  return [...urls];
+}
+async function deleteUnreferencedBlobs(urls) {
+  try {
+    const candidates = [...new Set(urls)].filter(isBlobUrl);
+    if (candidates.length === 0) return;
+    const db = await getDb();
+    if (!db) return;
+    const referencing = await db.collection("characters").find(
+      { $or: [{ "images.url": { $in: candidates } }, { imageUrl: { $in: candidates } }] },
+      { projection: { images: 1, imageUrl: 1 } }
+    ).toArray();
+    const stillUsed = new Set(collectBlobUrls(referencing));
+    const orphaned = candidates.filter((url) => !stillUsed.has(url));
+    if (orphaned.length > 0) await del(orphaned);
   } catch (err) {
-    console.error("\u274C Failed to initialize Firebase SDK:", err);
-    return null;
+    console.error("Failed to delete orphaned character images from Blob:", err);
   }
 }
 
 // server/model/anime.model.ts
 async function fetchAllAnimes() {
+  const db = await getDb();
   if (!db) {
-    console.error("Firestore is not initialized. Cannot fetch animes.");
+    console.error("MongoDB is not initialized. Cannot fetch animes.");
     return [];
   }
   try {
-    const snapshot = await db.collection("animes").get();
-    const list = [];
-    snapshot.forEach((doc) => {
-      list.push({ ...doc.data() });
-    });
-    return list;
+    const docs = await db.collection("animes").find({}).toArray();
+    return docs.map(({ _id, ...rest }) => rest);
   } catch (err) {
-    console.error("Firestore read error for animes:", err);
+    console.error("MongoDB read error for animes:", err);
     return [];
   }
 }
 async function saveAnimeRecord(anime) {
+  const db = await getDb();
   if (!db) {
-    console.error("Failed to write local animes file. Firestore is not initialized.");
+    console.error("Failed to write local animes file. MongoDB is not initialized.");
     return;
   }
   try {
     const docId = String(anime.malId);
-    const docRef = db.collection("animes").doc(docId);
     const updatePayload = {
       malId: anime.malId
     };
@@ -254,27 +285,77 @@ async function saveAnimeRecord(anime) {
     if (anime.episodes !== void 0) updatePayload.episodes = anime.episodes;
     if (anime.score !== void 0) updatePayload.score = anime.score;
     if (anime.titles !== void 0) updatePayload.titles = anime.titles;
-    await docRef.set(updatePayload, { merge: true });
+    await db.collection("animes").updateOne(
+      { _id: docId },
+      { $set: updatePayload },
+      { upsert: true }
+    );
   } catch (err) {
-    console.error("Firestore write error for anime record:", anime.malId, err);
+    console.error("MongoDB write error for anime record:", anime.malId, err);
   }
+}
+async function deleteAnimeWithCharacters(malId) {
+  const db = await getDb();
+  if (!db) {
+    throw new Error("MongoDB is not initialized. Cannot delete anime.");
+  }
+  const id = Number(malId);
+  const characters = db.collection("characters");
+  const linkedDocs = await characters.find({ sources: { $in: [id, String(id)] } }).toArray();
+  const idsToDelete = [];
+  let updatedCharacters = 0;
+  for (const doc of linkedDocs) {
+    const remainingSources = (Array.isArray(doc.sources) ? doc.sources : []).filter((s) => Number(s) !== id);
+    const hasOtherAnime = remainingSources.some((s) => Number(s) > 0);
+    if (!hasOtherAnime) {
+      idsToDelete.push(String(doc._id));
+      continue;
+    }
+    const update = { sources: remainingSources, updatedAt: (/* @__PURE__ */ new Date()).toISOString() };
+    if (Number(doc.source) === id) {
+      update.source = remainingSources[0] ?? null;
+    }
+    await characters.updateOne({ _id: doc._id }, { $set: update });
+    updatedCharacters++;
+  }
+  if (idsToDelete.length > 0) {
+    const removedDocs = await characters.find({ _id: { $in: idsToDelete } }, { projection: { images: 1, imageUrl: 1 } }).toArray();
+    await characters.deleteMany({ _id: { $in: idsToDelete } });
+    await deleteUnreferencedBlobs(collectBlobUrls(removedDocs));
+  }
+  await db.collection("animes").deleteOne({ _id: String(id) });
+  return { deletedCharacters: idsToDelete.length, updatedCharacters };
+}
+
+// shared/utils/index.ts
+function getEnglishTitle(anime) {
+  const english = anime.title_english || anime.titles?.find((t) => t?.type === "English" && t.title)?.title;
+  return String(english || anime.title || "").trim();
+}
+function parseMatchScoreNum(matchScore) {
+  if (!matchScore) return 0;
+  if (matchScore.includes("/")) {
+    const parts = matchScore.split("/");
+    const val2 = parseInt(parts[0], 10);
+    return isNaN(val2) ? 0 : val2;
+  }
+  const val = parseInt(matchScore, 10);
+  return isNaN(val) ? 0 : val;
 }
 
 // server/model/character.model.ts
 async function fetchAllCharacters() {
-  const db2 = getFirestoreDb();
+  const db = await getDb();
   let rawList = [];
-  if (!db2) {
-    console.error("Firestore is not initialized. Cannot fetch characters.");
+  if (!db) {
+    console.error("MongoDB is not initialized. Cannot fetch characters.");
     return [];
   } else {
     try {
-      const snapshot = await db2.collection("characters").get();
-      snapshot.forEach((doc) => {
-        rawList.push({ id: doc.id, ...doc.data() });
-      });
+      const docs = await db.collection("characters").find({}).toArray();
+      rawList = docs.map(({ _id, ...rest }) => ({ id: String(_id), ...rest }));
     } catch (err) {
-      console.error("Firestore read error for characters:", err);
+      console.error("MongoDB read error for characters:", err);
       rawList = [];
     }
   }
@@ -404,47 +485,55 @@ async function saveCharacterRecord(newChar) {
   if (!newChar.registeredAt) {
     finalCharData.registeredAt = (/* @__PURE__ */ new Date()).toISOString();
   }
-  const db2 = getFirestoreDb();
-  if (!db2) {
-    console.error("Firestore is not initialized. Cannot save character record:", charId);
+  const db = await getDb();
+  if (!db) {
+    console.error("MongoDB is not initialized. Cannot save character record:", charId);
     return;
   }
+  const storedCharData = await externalizeCharacterImages(finalCharData);
+  const previous = await db.collection("characters").findOne(
+    { _id: charId },
+    { projection: { images: 1, imageUrl: 1 } }
+  );
   try {
-    const docRef = db2.collection("characters").doc(charId);
-    await docRef.set(finalCharData);
+    await db.collection("characters").replaceOne({ _id: charId }, storedCharData, { upsert: true });
   } catch (err) {
-    console.error("Firestore save character error:", err);
+    console.error("MongoDB save character error:", err);
     throw err;
   }
+  await deleteUnreferencedBlobs(collectBlobUrls([previous]));
 }
 async function deleteCharacterRecord(id) {
-  const db2 = getFirestoreDb();
-  if (!db2) {
-    console.error("Firestore is not initialized. Cannot delete character record:", id);
+  const db = await getDb();
+  if (!db) {
+    console.error("MongoDB is not initialized. Cannot delete character record:", id);
     return;
   }
-  const docRef = db2.collection("characters").doc(id);
-  await docRef.delete();
+  const existing = await db.collection("characters").findOne(
+    { _id: id },
+    { projection: { images: 1, imageUrl: 1 } }
+  );
+  await db.collection("characters").deleteOne({ _id: id });
+  await deleteUnreferencedBlobs(collectBlobUrls([existing]));
 }
 async function batchUpdateCharacterTraits(characterIds, newTraits, action = "add") {
   if (!characterIds || characterIds.length === 0 || !newTraits || Object.keys(newTraits).length === 0) {
     return { updatedCount: 0 };
   }
-  const db2 = getFirestoreDb();
+  const db = await getDb();
   const idSet = new Set(characterIds.map((id) => String(id)));
   let rawList = [];
-  if (!db2) {
-    throw new Error("Firestore is not initialized. Cannot update character traits.");
+  if (!db) {
+    throw new Error("MongoDB is not initialized. Cannot update character traits.");
   } else {
     try {
-      const snapshot = await db2.collection("characters").get();
-      snapshot.forEach((doc) => {
-        rawList.push({ id: doc.id, ...doc.data() });
-      });
+      const docs = await db.collection("characters").find({}).toArray();
+      rawList = docs.map(({ _id, ...rest }) => ({ id: String(_id), ...rest }));
     } catch (err) {
-      console.error("Firestore read error for characters:", err);
+      console.error("MongoDB read error for characters:", err);
     }
   }
+  const bulkOps = [];
   let updatedCount = 0;
   for (const char of rawList) {
     const charIdStr = String(char.id);
@@ -499,41 +588,129 @@ async function batchUpdateCharacterTraits(characterIds, newTraits, action = "add
       });
       char.traits = updatedTraits;
       char.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
-      if (db2) {
-        try {
-          const docRef = db2.collection("characters").doc(char.id);
-          await docRef.set(char);
-        } catch (err) {
-          console.error("Failed to update character traits in Firestore:", err);
+      bulkOps.push({
+        updateOne: {
+          filter: { _id: char.id },
+          update: { $set: { traits: updatedTraits, updatedAt: char.updatedAt } }
         }
-      }
+      });
       updatedCount++;
+    }
+  }
+  if (db && bulkOps.length > 0) {
+    try {
+      await db.collection("characters").bulkWrite(bulkOps);
+    } catch (err) {
+      console.error("Failed to update character traits in MongoDB:", err);
     }
   }
   return { updatedCount };
 }
+var sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+async function fetchAnimeFromMal(malId) {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const json = await fetchAnimeDetails(malId, `anime-full-${malId}`);
+      const a = json?.data;
+      if (!a) return null;
+      return {
+        malId,
+        title: getEnglishTitle(a),
+        type: a.type ?? null,
+        source: a.source ?? null,
+        year: a.year ?? (a.aired?.prop?.from?.year ?? null),
+        studios: Array.isArray(a.studios) ? a.studios.map((x) => x.name) : [],
+        genres: Array.isArray(a.genres) ? a.genres.map((x) => x.name) : [],
+        images: a.images ?? null,
+        episodes: a.episodes ?? null,
+        score: a.score ?? null,
+        titles: a.titles ?? null
+      };
+    } catch (err) {
+      if (/rate limit|429/i.test(String(err?.message))) {
+        await sleep(1500 * (attempt + 1));
+        continue;
+      }
+      console.error(`Failed to fetch anime ${malId} from MAL:`, err?.message || err);
+      return null;
+    }
+  }
+  return null;
+}
+async function ensureAnimesRegistered(entries) {
+  if (entries.size === 0) return;
+  const existing = new Set((await fetchAllAnimes()).map((a) => Number(a.malId)));
+  for (const [malId, fallbackTitle] of entries) {
+    if (existing.has(malId)) continue;
+    const details = await fetchAnimeFromMal(malId);
+    if (details) {
+      await saveAnimeRecord(details);
+      await sleep(400);
+    } else if (fallbackTitle) {
+      await saveAnimeRecord({ malId, title: fallbackTitle });
+    } else {
+      continue;
+    }
+    existing.add(malId);
+  }
+}
 async function importCharactersBatch(importedChars, mode) {
-  const db2 = getFirestoreDb();
+  const db = await getDb();
+  if (!db) {
+    console.error("MongoDB is not initialized. Cannot import characters batch.");
+    return 0;
+  }
+  const registeredAnimes = await fetchAllAnimes();
+  const titleToMalId = /* @__PURE__ */ new Map();
+  registeredAnimes.forEach((a) => {
+    const id = Number(a.malId);
+    if (!id) return;
+    if (a.title) titleToMalId.set(String(a.title).trim().toLowerCase(), id);
+    if (Array.isArray(a.titles)) {
+      a.titles.forEach((t) => t?.title && titleToMalId.set(String(t.title).trim().toLowerCase(), id));
+    }
+  });
+  const animesToRegister = /* @__PURE__ */ new Map();
   const sanitizedImported = [];
   for (const char of importedChars) {
     if (!char || typeof char !== "object") continue;
     if (!char.name) continue;
     const id = char.id || `char-imported-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
-    const rawSources = Array.isArray(char.sources) ? char.sources.map((s) => String(s).trim()) : [];
     const malIds = [];
-    for (const src of rawSources) {
-      if (!src) continue;
-      malIds.push(0);
+    const addAnime = (rawId, title) => {
+      const mId = Number(rawId);
+      if (!Number.isInteger(mId) || mId <= 0) return;
+      if (!malIds.includes(mId)) malIds.push(mId);
+      if (!animesToRegister.has(mId) || !animesToRegister.get(mId)) {
+        animesToRegister.set(mId, title ? String(title).trim() : "");
+      }
+    };
+    if (Array.isArray(char.animeSources)) {
+      char.animeSources.forEach((as) => as && addAnime(as.malId, as.title));
     }
+    if (Array.isArray(char.sources)) {
+      char.sources.forEach((s) => {
+        if (typeof s === "number" || typeof s === "string" && /^\d+$/.test(s.trim())) {
+          addAnime(s);
+        } else if (typeof s === "string") {
+          const found = titleToMalId.get(s.trim().toLowerCase());
+          if (found) addAnime(found, s);
+        }
+      });
+    }
+    if (char.source !== void 0 && char.source !== null) addAnime(char.source);
     const defaultImgUrl = char.imageUrl ? String(char.imageUrl).trim() : "https://cdn.myanimelist.net/images/characters/failed_to_load.jpg";
     const importedImages = Array.isArray(char.images) && char.images.length > 0 ? char.images.map((img) => ({
       url: String(img.url || img.imageUrl || defaultImgUrl).trim(),
       label: String(img.label || "Profile Image").trim()
     })) : [{ url: defaultImgUrl, label: "Default Profile" }];
+    const variationTitle = char.variationTitle && String(char.variationTitle).trim().length > 0 ? String(char.variationTitle).trim() : "Default";
+    const now = (/* @__PURE__ */ new Date()).toISOString();
     sanitizedImported.push({
       id,
-      malId: typeof char.malId === "number" ? char.malId : 0,
+      malId: Number(char.malId) || 0,
       name: String(char.name).trim(),
+      variationTitle,
       imageUrl: importedImages[0]?.url || defaultImgUrl,
       images: importedImages,
       source: malIds[0] || null,
@@ -541,52 +718,57 @@ async function importCharactersBatch(importedChars, mode) {
       role: char.role ? String(char.role).trim() : "Supporting",
       traits: char.traits && typeof char.traits === "object" && !Array.isArray(char.traits) ? char.traits : {},
       nicknames: Array.isArray(char.nicknames) ? char.nicknames.map((n) => String(n).trim()) : [],
-      registeredAt: char.registeredAt || (/* @__PURE__ */ new Date()).toISOString()
+      registeredAt: char.registeredAt || now,
+      updatedAt: char.updatedAt || char.registeredAt || now
     });
   }
-  if (!db2) {
-    console.error("Firestore is not initialized. Cannot import characters batch.");
-    return 0;
+  await ensureAnimesRegistered(animesToRegister);
+  const imageCache = /* @__PURE__ */ new Map();
+  for (let i = 0; i < sanitizedImported.length; i++) {
+    sanitizedImported[i] = await externalizeCharacterImages(sanitizedImported[i], imageCache);
   }
+  const previousDocs = await db.collection("characters").find(
+    mode === "overwrite" ? {} : { _id: { $in: sanitizedImported.map((c) => c.id) } },
+    { projection: { images: 1, imageUrl: 1 } }
+  ).toArray();
   if (mode === "overwrite") {
-    const snapshot = await db2.collection("characters").get();
-    const batch = db2.batch();
-    snapshot.forEach((d) => {
-      batch.delete(d.ref);
-    });
-    await batch.commit();
-    const batchWrite = db2.batch();
-    for (const char of sanitizedImported) {
-      const docRef = db2.collection("characters").doc(char.id);
-      batchWrite.set(docRef, char);
+    await db.collection("characters").deleteMany({});
+    if (sanitizedImported.length > 0) {
+      await db.collection("characters").insertMany(
+        sanitizedImported.map((char) => ({ ...char, _id: char.id }))
+      );
     }
-    await batchWrite.commit();
   } else {
-    const batchWrite = db2.batch();
-    for (const char of sanitizedImported) {
-      const docRef = db2.collection("characters").doc(char.id);
-      batchWrite.set(docRef, char);
+    if (sanitizedImported.length > 0) {
+      const ops = sanitizedImported.map((char) => ({
+        replaceOne: {
+          filter: { _id: char.id },
+          replacement: char,
+          upsert: true
+        }
+      }));
+      await db.collection("characters").bulkWrite(ops);
     }
-    await batchWrite.commit();
   }
+  await deleteUnreferencedBlobs(collectBlobUrls(previousDocs));
   return sanitizedImported.length;
 }
 
 // server/model/user.model.ts
 async function fetchAllUsers() {
-  const db2 = getFirestoreDb();
+  const db = await getDb();
   let usersList = [];
-  if (db2) {
+  if (db) {
     try {
-      const snapshot = await db2.collection("users").get();
-      snapshot.forEach((docSnap) => {
-        const data = docSnap.data();
-        if (data && data.uid) {
-          usersList.push(data);
+      const docs = await db.collection("users").find({}).toArray();
+      docs.forEach((doc) => {
+        const { _id, ...rest } = doc;
+        if (rest && rest.uid) {
+          usersList.push(rest);
         }
       });
     } catch (err) {
-      console.error("Failed to fetch users from Firestore:", err);
+      console.error("Failed to fetch users from MongoDB:", err);
     }
   }
   const map = /* @__PURE__ */ new Map();
@@ -623,13 +805,12 @@ async function syncUserRecord(input) {
       lastLoginAt: now
     };
   }
-  const db2 = getFirestoreDb();
-  if (db2) {
+  const db = await getDb();
+  if (db) {
     try {
-      const userRef = db2.collection("users").doc(profile.uid);
-      await userRef.set(profile, { merge: true });
+      await db.collection("users").updateOne({ _id: profile.uid }, { $set: profile }, { upsert: true });
     } catch (err) {
-      console.error("Failed to save user record to Firestore:", err);
+      console.error("Failed to save user record to MongoDB:", err);
     }
   }
   return profile;
@@ -641,13 +822,12 @@ async function updateUserRole(uid, newRole) {
     throw new Error(`User with UID ${uid} not found.`);
   }
   target.role = newRole;
-  const db2 = getFirestoreDb();
-  if (db2) {
+  const db = await getDb();
+  if (db) {
     try {
-      const userRef = db2.collection("users").doc(uid);
-      await userRef.set({ role: newRole }, { merge: true });
+      await db.collection("users").updateOne({ _id: uid }, { $set: { role: newRole } }, { upsert: true });
     } catch (err) {
-      console.error("Failed to update user role in Firestore:", err);
+      console.error("Failed to update user role in MongoDB:", err);
     }
   }
   return target;
@@ -660,85 +840,65 @@ async function updateUserBanStatus(uid, isBanned, banReason) {
   }
   target.isBanned = isBanned;
   target.banReason = banReason || "";
-  const db2 = getFirestoreDb();
-  if (db2) {
+  const db = await getDb();
+  if (db) {
     try {
-      const userRef = db2.collection("users").doc(uid);
-      await userRef.set({ isBanned, banReason: banReason || "" }, { merge: true });
+      await db.collection("users").updateOne({ _id: uid }, { $set: { isBanned, banReason: banReason || "" } }, { upsert: true });
     } catch (err) {
-      console.error("Failed to update user ban status in Firestore:", err);
+      console.error("Failed to update user ban status in MongoDB:", err);
     }
   }
   return target;
 }
 
-// shared/utils/index.ts
-function parseMatchScoreNum(matchScore) {
-  if (!matchScore) return 0;
-  if (matchScore.includes("/")) {
-    const parts = matchScore.split("/");
-    const val2 = parseInt(parts[0], 10);
-    return isNaN(val2) ? 0 : val2;
-  }
-  const val = parseInt(matchScore, 10);
-  return isNaN(val) ? 0 : val;
-}
-
 // server/model/puzzle.model.ts
 async function savePuzzleHistoryRecord(record) {
-  const db2 = getFirestoreDb();
-  if (db2) {
+  const db = await getDb();
+  if (db) {
     try {
-      const docRef = db2.collection("puzzle_history").doc(record.id);
-      await docRef.set(record);
-      console.log(`\u{1F4BE} Saved puzzle history record ${record.id} to Firestore.`);
+      await db.collection("puzzle_history").replaceOne({ _id: record.id }, record, { upsert: true });
+      console.log(`\u{1F4BE} Saved puzzle history record ${record.id} to MongoDB.`);
     } catch (err) {
-      console.error("Failed to save puzzle history record to Firestore:", err);
+      console.error("Failed to save puzzle history record to MongoDB:", err);
     }
   }
   return record;
 }
 async function fetchUserPuzzleHistory(userId) {
-  const db2 = getFirestoreDb();
-  let firestoreItems = [];
-  if (db2) {
+  const db = await getDb();
+  let items = [];
+  if (db) {
     try {
-      const snapshot = await db2.collection("puzzle_history").get();
-      snapshot.forEach((docSnap) => {
-        const data = docSnap.data();
-        if (data && data.userId === userId) {
-          firestoreItems.push(data);
-        }
-      });
+      const docs = await db.collection("puzzle_history").find({ userId }).toArray();
+      items = docs.map(({ _id, ...rest }) => rest);
     } catch (err) {
-      console.error("Failed to fetch user puzzle history from Firestore:", err);
+      console.error("Failed to fetch user puzzle history from MongoDB:", err);
     }
   }
-  return firestoreItems;
+  return items;
 }
 async function deletePuzzleHistoryRecord(id) {
-  const db2 = getFirestoreDb();
-  if (db2) {
+  const db = await getDb();
+  if (db) {
     try {
-      const docRef = db2.collection("puzzle_history").doc(id);
-      await docRef.delete();
+      await db.collection("puzzle_history").deleteOne({ _id: id });
     } catch (err) {
-      console.error("Failed to delete puzzle history from Firestore:", err);
+      console.error("Failed to delete puzzle history from MongoDB:", err);
     }
   }
   return true;
 }
 async function fetchDailyPuzzle(date) {
-  const db2 = getFirestoreDb();
-  if (db2) {
+  const db = await getDb();
+  if (db) {
     try {
-      const docRef = db2.collection("daily_puzzles").doc(date);
-      const docSnap = await docRef.get();
-      if (docSnap.exists) {
-        return docSnap.data();
+      const doc = await db.collection("daily_puzzles").findOne({ _id: date });
+      if (doc) {
+        const { _id, ...rest } = doc;
+        return rest;
       }
     } catch (err) {
-      console.error(`Failed to fetch daily puzzle for ${date} from Firestore:`, err);
+      console.error(`Failed to fetch daily puzzle for ${date} from MongoDB:`, err);
     }
   }
   return null;
@@ -750,19 +910,18 @@ async function saveDailyPuzzle(date, puzzleCode, gameMode) {
     gameMode,
     createdAt: (/* @__PURE__ */ new Date()).toISOString()
   };
-  const db2 = getFirestoreDb();
-  if (db2) {
+  const db = await getDb();
+  if (db) {
     try {
-      const docRef = db2.collection("daily_puzzles").doc(date);
-      await docRef.set(record, { merge: true });
+      await db.collection("daily_puzzles").updateOne({ _id: date }, { $set: record }, { upsert: true });
     } catch (err) {
-      console.error(`Failed to save daily puzzle for ${date} to Firestore:`, err);
+      console.error(`Failed to save daily puzzle for ${date} to MongoDB:`, err);
     }
   }
   return record;
 }
 async function fetchDailyLeaderboard(date) {
-  const db2 = getFirestoreDb();
+  const db = await getDb();
   let entriesMap = /* @__PURE__ */ new Map();
   let usersMap = /* @__PURE__ */ new Map();
   try {
@@ -770,17 +929,18 @@ async function fetchDailyLeaderboard(date) {
     allUsers.forEach((u) => usersMap.set(u.uid, u));
   } catch (e) {
   }
-  if (db2) {
+  if (db) {
     try {
-      const snapshot = await db2.collection("daily_leaderboards").where("date", "==", date).get();
-      snapshot.forEach((docSnap) => {
-        const data = docSnap.data();
+      const docs = await db.collection("daily_leaderboards").find({ date }).toArray();
+      docs.forEach((doc) => {
+        const { _id, ...rest } = doc;
+        const data = rest;
         if (data && data.userId) {
-          entriesMap.set(data.id || docSnap.id, { ...data, id: data.id || docSnap.id });
+          entriesMap.set(data.id || String(_id), { ...data, id: data.id || String(_id) });
         }
       });
     } catch (err) {
-      console.error(`Failed to fetch daily leaderboard for ${date} from Firestore:`, err);
+      console.error(`Failed to fetch daily leaderboard for ${date} from MongoDB:`, err);
     }
   }
   let entries = Array.from(entriesMap.values());
@@ -830,32 +990,30 @@ async function saveDailyLeaderboardEntry(input) {
     ...input,
     id
   };
-  const db2 = getFirestoreDb();
-  if (db2) {
+  const db = await getDb();
+  if (db) {
     try {
-      const docRef = db2.collection("daily_leaderboards").doc(id);
-      const existingSnap = await docRef.get();
-      if (existingSnap.exists) {
+      const existing = await db.collection("daily_leaderboards").findOne({ _id: id });
+      if (existing) {
         return {
           success: false,
           reason: `You already have a submitted score on the leaderboard for ${input.date}.`
         };
       }
-      await docRef.set(fullEntry);
+      await db.collection("daily_leaderboards").insertOne({ ...fullEntry, _id: id });
     } catch (err) {
-      console.error("Failed to save leaderboard entry to Firestore:", err);
+      console.error("Failed to save leaderboard entry to MongoDB:", err);
     }
   }
   return { success: true, entry: fullEntry };
 }
 async function deleteDailyLeaderboardEntry(id) {
-  const db2 = getFirestoreDb();
-  if (db2) {
+  const db = await getDb();
+  if (db) {
     try {
-      const docRef = db2.collection("daily_leaderboards").doc(id);
-      await docRef.delete();
+      await db.collection("daily_leaderboards").deleteOne({ _id: id });
     } catch (err) {
-      console.error(`Failed to delete daily leaderboard entry ${id} from Firestore:`, err);
+      console.error(`Failed to delete daily leaderboard entry ${id} from MongoDB:`, err);
     }
   }
   return true;
@@ -863,18 +1021,17 @@ async function deleteDailyLeaderboardEntry(id) {
 
 // server/model/trait.model.ts
 async function fetchAllTraits() {
-  const db2 = getFirestoreDb();
-  if (!db2) {
-    console.log("Firestore is not initialized. Cannot fetch traits.");
+  const db = await getDb();
+  if (!db) {
+    console.log("MongoDB is not initialized. Cannot fetch traits.");
     return {};
   }
   try {
-    const snapshot = await db2.collection("traits").get();
+    const docs = await db.collection("traits").find({}).toArray();
     const traits = {};
-    snapshot.forEach((docSnap) => {
-      const data = docSnap.data();
-      const rawValues = data.values || [];
-      traits[docSnap.id] = rawValues.map((v) => {
+    docs.forEach((doc) => {
+      const rawValues = doc.values || [];
+      traits[String(doc._id)] = rawValues.map((v) => {
         return {
           name: v.name || "",
           description: v.description || ""
@@ -883,98 +1040,97 @@ async function fetchAllTraits() {
     });
     return traits;
   } catch (err) {
-    console.error("Firestore read error for traits:", err);
+    console.error("MongoDB read error for traits:", err);
     return {};
   }
 }
 async function saveTraitsRecord(updatedTraits) {
-  const db2 = getFirestoreDb();
-  if (!db2) {
-    console.error("Firestore is not initialized. Cannot save traits record.");
+  const db = await getDb();
+  if (!db) {
+    console.error("MongoDB is not initialized. Cannot save traits record.");
     return;
   }
-  const snapshot = await db2.collection("traits").get();
-  const existingKeys = [];
-  snapshot.forEach((docSnap) => {
-    existingKeys.push(docSnap.id);
-  });
-  const batch = db2.batch();
+  const existingDocs = await db.collection("traits").find({}, { projection: { _id: 1 } }).toArray();
+  const existingKeys = existingDocs.map((d) => String(d._id));
+  const bulkOps = [];
   for (const [key, values] of Object.entries(updatedTraits)) {
-    const docRef = db2.collection("traits").doc(key);
-    batch.set(docRef, { values });
+    bulkOps.push({
+      updateOne: {
+        filter: { _id: key },
+        update: { $set: { values } },
+        upsert: true
+      }
+    });
   }
   for (const oldKey of existingKeys) {
     if (updatedTraits[oldKey] === void 0) {
-      const docRef = db2.collection("traits").doc(oldKey);
-      batch.delete(docRef);
+      bulkOps.push({ deleteOne: { filter: { _id: oldKey } } });
     }
   }
-  await batch.commit();
+  if (bulkOps.length > 0) {
+    await db.collection("traits").bulkWrite(bulkOps);
+  }
 }
 async function removeTraitAndCleanCharacters(key) {
-  const db2 = getFirestoreDb();
+  const db = await getDb();
   const trimmedKey = key.trim();
-  if (!db2) {
-    console.error("Firestore is not initialized. Cannot remove trait and clean characters.");
+  if (!db) {
+    console.error("MongoDB is not initialized. Cannot remove trait and clean characters.");
     return {};
   }
-  const traitRef = db2.collection("traits").doc(trimmedKey);
-  await traitRef.delete();
-  const snapshot = await db2.collection("characters").get();
-  const batch = db2.batch();
-  let counter = 0;
-  snapshot.forEach((docSnap) => {
-    const data = docSnap.data();
-    if (data.traits && data.traits[trimmedKey] !== void 0) {
-      const updatedTraitsMap = { ...data.traits };
+  await db.collection("traits").deleteOne({ _id: trimmedKey });
+  const docs = await db.collection("characters").find({}).toArray();
+  const bulkOps = [];
+  docs.forEach((doc) => {
+    if (doc.traits && doc.traits[trimmedKey] !== void 0) {
+      const updatedTraitsMap = { ...doc.traits };
       delete updatedTraitsMap[trimmedKey];
-      batch.update(docSnap.ref, { traits: updatedTraitsMap });
-      counter++;
+      bulkOps.push({
+        updateOne: { filter: { _id: doc._id }, update: { $set: { traits: updatedTraitsMap } } }
+      });
     }
   });
-  if (counter > 0) {
-    await batch.commit();
+  if (bulkOps.length > 0) {
+    await db.collection("characters").bulkWrite(bulkOps);
   }
   return await fetchAllTraits();
 }
 async function renameTraitKey(oldKey, newKey) {
-  const db2 = getFirestoreDb();
+  const db = await getDb();
   const trimmedOld = oldKey.trim();
   const trimmedNew = newKey.trim();
   if (trimmedOld === trimmedNew) {
     return await fetchAllTraits();
   }
-  if (!db2) {
-    console.error("Firestore is not initialized. Cannot rename trait key.");
+  if (!db) {
+    console.error("MongoDB is not initialized. Cannot rename trait key.");
     return {};
   }
-  const oldDocRef = db2.collection("traits").doc(trimmedOld);
-  const oldDocSnap = await oldDocRef.get();
-  if (oldDocSnap.exists) {
-    const values = oldDocSnap.data()?.values || [];
-    await db2.collection("traits").doc(trimmedNew).set({ values });
-    await oldDocRef.delete();
+  const oldDoc = await db.collection("traits").findOne({ _id: trimmedOld });
+  if (oldDoc) {
+    const values = oldDoc.values || [];
+    await db.collection("traits").replaceOne({ _id: trimmedNew }, { values }, { upsert: true });
+    await db.collection("traits").deleteOne({ _id: trimmedOld });
   }
-  const snapshot = await db2.collection("characters").get();
-  const batch = db2.batch();
-  let counter = 0;
-  snapshot.forEach((docSnap) => {
-    const data = docSnap.data();
-    if (data.traits && data.traits[trimmedOld] !== void 0) {
-      const updatedTraitsMap = { ...data.traits };
+  const docs = await db.collection("characters").find({}).toArray();
+  const bulkOps = [];
+  docs.forEach((doc) => {
+    if (doc.traits && doc.traits[trimmedOld] !== void 0) {
+      const updatedTraitsMap = { ...doc.traits };
       updatedTraitsMap[trimmedNew] = updatedTraitsMap[trimmedOld];
       delete updatedTraitsMap[trimmedOld];
-      batch.update(docSnap.ref, { traits: updatedTraitsMap });
-      counter++;
+      bulkOps.push({
+        updateOne: { filter: { _id: doc._id }, update: { $set: { traits: updatedTraitsMap } } }
+      });
     }
   });
-  if (counter > 0) {
-    await batch.commit();
+  if (bulkOps.length > 0) {
+    await db.collection("characters").bulkWrite(bulkOps);
   }
   return await fetchAllTraits();
 }
 async function updateTraitDefinition(key, newKey, values) {
-  const db2 = getFirestoreDb();
+  const db = await getDb();
   const trimmedKey = key.trim();
   const trimmedNew = newKey ? newKey.trim() : trimmedKey;
   const seenNames = /* @__PURE__ */ new Set();
@@ -990,58 +1146,56 @@ async function updateTraitDefinition(key, newKey, values) {
     }
   }
   const valueNames = sanitizedValues.map((v) => v.name);
-  if (!db2) {
-    console.error("Firestore is not initialized. Cannot update trait definition.");
+  if (!db) {
+    console.error("MongoDB is not initialized. Cannot update trait definition.");
     return {};
   }
   if (trimmedNew !== trimmedKey) {
-    await db2.collection("traits").doc(trimmedNew).set({ values: sanitizedValues });
-    await db2.collection("traits").doc(trimmedKey).delete();
+    await db.collection("traits").replaceOne({ _id: trimmedNew }, { values: sanitizedValues }, { upsert: true });
+    await db.collection("traits").deleteOne({ _id: trimmedKey });
   } else {
-    await db2.collection("traits").doc(trimmedKey).set({ values: sanitizedValues });
+    await db.collection("traits").replaceOne({ _id: trimmedKey }, { values: sanitizedValues }, { upsert: true });
   }
-  const snapshot = await db2.collection("characters").get();
-  const batch = db2.batch();
-  let counter = 0;
-  snapshot.forEach((docSnap) => {
-    const data = docSnap.data();
-    if (data.traits) {
-      let charVal = data.traits[trimmedKey];
+  const docs = await db.collection("characters").find({}).toArray();
+  const bulkOps = [];
+  docs.forEach((doc) => {
+    if (doc.traits) {
+      let charVal = doc.traits[trimmedKey];
       let hasKey = charVal !== void 0;
       if (hasKey) {
         let currentVals = Array.isArray(charVal) ? charVal : typeof charVal === "string" ? charVal.split(",").map((v) => v.trim()).filter(Boolean) : [];
         const filteredVals = currentVals.filter((v) => valueNames.includes(v));
-        const updatedTraitsMap = { ...data.traits };
+        const updatedTraitsMap = { ...doc.traits };
         if (trimmedNew !== trimmedKey) {
           updatedTraitsMap[trimmedNew] = filteredVals;
           delete updatedTraitsMap[trimmedKey];
         } else {
           updatedTraitsMap[trimmedKey] = filteredVals;
         }
-        batch.update(docSnap.ref, { traits: updatedTraitsMap });
-        counter++;
+        bulkOps.push({
+          updateOne: { filter: { _id: doc._id }, update: { $set: { traits: updatedTraitsMap } } }
+        });
       }
     }
   });
-  if (counter > 0) {
-    await batch.commit();
+  if (bulkOps.length > 0) {
+    await db.collection("characters").bulkWrite(bulkOps);
   }
   return await fetchAllTraits();
 }
 async function addTraitValue(key, value, description) {
-  const db2 = getFirestoreDb();
+  const db = await getDb();
   const trimmedKey = key.trim();
   const trimmedValue = value.trim();
   const desc = description ? description.trim() : "";
-  if (!db2) {
-    console.error("Firestore is not initialized. Cannot add trait value.");
+  if (!db) {
+    console.error("MongoDB is not initialized. Cannot add trait value.");
     return {};
   }
-  const traitRef = db2.collection("traits").doc(trimmedKey);
-  const traitSnap = await traitRef.get();
+  const traitDoc = await db.collection("traits").findOne({ _id: trimmedKey });
   let values = [];
-  if (traitSnap.exists) {
-    const rawValues = traitSnap.data()?.values || [];
+  if (traitDoc) {
+    const rawValues = traitDoc.values || [];
     values = rawValues.map((v) => {
       if (typeof v === "string") {
         return { name: v, description: `${v} characteristic for ${trimmedKey}` };
@@ -1055,17 +1209,71 @@ async function addTraitValue(key, value, description) {
   if (!values.some((v) => v.name.toLowerCase() === trimmedValue.toLowerCase())) {
     values.push({ name: trimmedValue, description: desc });
   }
-  await traitRef.set({ values });
+  await db.collection("traits").replaceOne({ _id: trimmedKey }, { values }, { upsert: true });
   return await fetchAllTraits();
+}
+async function importTraitsBatch(importedTraits, mode) {
+  if (mode === "overwrite") {
+    await saveTraitsRecord(importedTraits);
+    return importedTraits;
+  }
+  const finalTraits = { ...await fetchAllTraits() };
+  for (const [key, values] of Object.entries(importedTraits)) {
+    const mergedList = [...finalTraits[key] || []];
+    values.forEach((newOpt) => {
+      if (!mergedList.some((v) => v.name.toLowerCase() === newOpt.name.toLowerCase())) {
+        mergedList.push(newOpt);
+      }
+    });
+    finalTraits[key] = mergedList;
+  }
+  await saveTraitsRecord(finalTraits);
+  return finalTraits;
 }
 
 // server/routes/firebase.route.ts
 async function firebaseRoutes(app2) {
-  app2.get("/api/firebase-status", (_, res) => {
+  app2.get("/api/firebase-status", async (_, res) => {
     try {
-      res.json(getFirebaseStatus());
+      res.json(await getDatabaseStatus());
     } catch (err) {
-      res.status(500).json({ error: "Failed to determine Firebase status." });
+      res.status(500).json({ error: "Failed to determine database status." });
+    }
+  });
+}
+
+// server/routes/image.route.ts
+import multer from "multer";
+var ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
+var MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+var upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_IMAGE_BYTES }
+});
+function handleImageUpload(req, res, next) {
+  upload.single("file")(req, res, (err) => {
+    if (err instanceof multer.MulterError && err.code === "LIMIT_FILE_SIZE") {
+      return res.status(413).json({ error: "Image exceeds the 5 MB limit." });
+    }
+    if (err) return next(err);
+    next();
+  });
+}
+async function imageRoutes(app2) {
+  app2.post("/api/images", handleImageUpload, async (req, res) => {
+    try {
+      const file = req.file;
+      if (!file) {
+        return res.status(400).json({ error: "No file uploaded." });
+      }
+      if (!ALLOWED_IMAGE_TYPES.includes(file.mimetype)) {
+        return res.status(415).json({ error: "Unsupported image type. Use JPEG, PNG or WebP." });
+      }
+      const url = await uploadImageBuffer(file.buffer, file.mimetype);
+      res.json({ url });
+    } catch (err) {
+      console.error("Failed to upload image:", err);
+      res.status(500).json({ error: "Failed to upload image." });
     }
   });
 }
@@ -1094,9 +1302,28 @@ async function animeRoutes(app2) {
       res.status(500).json({ error: "Failed to save anime record." });
     }
   });
+  app2.delete("/api/database/animes/:malId", async (req, res) => {
+    try {
+      const malId = Number(req.params.malId);
+      if (!Number.isInteger(malId) || malId <= 0) {
+        return res.status(400).json({ error: "Invalid anime malId." });
+      }
+      const result = await deleteAnimeWithCharacters(malId);
+      res.json({
+        success: true,
+        ...result,
+        message: `Anime removed from registry. ${result.deletedCharacters} characters deleted, ${result.updatedCharacters} characters updated.`
+      });
+    } catch (err) {
+      console.error("Failed to delete anime record:", err);
+      res.status(500).json({ error: "Failed to delete anime record." });
+    }
+  });
 }
 
 // server/routes/character.route.ts
+import multer2 from "multer";
+var upload2 = multer2({ storage: multer2.memoryStorage() });
 async function characterRoutes(app2) {
   app2.get("/api/database", async (req, res) => {
     try {
@@ -1148,12 +1375,21 @@ async function characterRoutes(app2) {
       res.status(500).json({ error: "Failed to apply batch traits update to database." });
     }
   });
-  app2.post("/api/database/import", async (req, res) => {
+  app2.post("/api/database/import", upload2.single("file"), async (req, res) => {
     try {
-      const { characters: importedChars, mode } = req.body;
+      if (!req.file) {
+        return res.status(400).json({ error: "A JSON file is required." });
+      }
+      let importedChars;
+      try {
+        importedChars = JSON.parse(req.file.buffer.toString("utf-8"));
+      } catch {
+        return res.status(400).json({ error: "The uploaded file is not a valid JSON file." });
+      }
       if (!Array.isArray(importedChars)) {
         return res.status(400).json({ error: "Imported data must be an array of characters." });
       }
+      const mode = req.body.mode === "overwrite" ? "overwrite" : "merge";
       const count = await importCharactersBatch(importedChars, mode);
       const allCharacters = await fetchAllCharacters();
       res.json({ success: true, count, total: allCharacters.length });
@@ -1299,6 +1535,25 @@ async function puzzleRoutes(app2) {
 }
 
 // server/routes/trait.route.ts
+import multer3 from "multer";
+var upload3 = multer3({ storage: multer3.memoryStorage() });
+function normalizeTraitsFile(json) {
+  if (!json || typeof json !== "object" || Array.isArray(json)) return null;
+  const normalized = {};
+  for (const [k, v] of Object.entries(json)) {
+    if (!Array.isArray(v)) return null;
+    normalized[k] = v.map((item) => {
+      if (typeof item === "string") {
+        return { name: item, description: `${item} characteristic for ${k.replace(/_/g, " ")}` };
+      }
+      return {
+        name: String(item?.name || "").trim(),
+        description: String(item?.description || "").trim()
+      };
+    });
+  }
+  return normalized;
+}
 async function traitRoutes(app2) {
   app2.get("/api/traits", async (req, res) => {
     try {
@@ -1329,6 +1584,29 @@ async function traitRoutes(app2) {
     } catch (err) {
       console.error("Failed to save traits database:", err);
       res.status(500).json({ error: "Failed to save traits database." });
+    }
+  });
+  app2.post("/api/traits/import", upload3.single("file"), async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: "A traits JSON file is required." });
+      }
+      let parsed;
+      try {
+        parsed = JSON.parse(req.file.buffer.toString("utf-8"));
+      } catch {
+        return res.status(400).json({ error: "The uploaded file is not a valid JSON file." });
+      }
+      const normalized = normalizeTraitsFile(parsed);
+      if (!normalized) {
+        return res.status(400).json({ error: "Invalid format. The traits backup needs to be a JSON object whose values are arrays." });
+      }
+      const mode = req.body.mode === "overwrite" ? "overwrite" : "merge";
+      const traits = await importTraitsBatch(normalized, mode);
+      res.json({ success: true, traits });
+    } catch (err) {
+      console.error("Failed to import traits:", err);
+      res.status(500).json({ error: "Failed to import traits database." });
     }
   });
   app2.post("/api/traits/delete", async (req, res) => {
@@ -1451,6 +1729,7 @@ await apiRoutes(app);
 await firebaseRoutes(app);
 await animeRoutes(app);
 await characterRoutes(app);
+await imageRoutes(app);
 await traitRoutes(app);
 await userRoutes(app);
 await puzzleRoutes(app);
