@@ -263,3 +263,23 @@ export async function addTraitValue(
 
   return await fetchAllTraits();
 }
+
+export async function importTraitsBatch(importedTraits: Record<string, TraitOption[]>, mode: "merge" | "overwrite"): Promise<Record<string, TraitOption[]>> {
+  if (mode === "overwrite") {
+    await saveTraitsRecord(importedTraits);
+    return importedTraits;
+  }
+
+  const finalTraits: Record<string, TraitOption[]> = { ...(await fetchAllTraits()) };
+  for (const [key, values] of Object.entries(importedTraits)) {
+    const mergedList = [...(finalTraits[key] || [])];
+    values.forEach((newOpt) => {
+      if (!mergedList.some((v) => v.name.toLowerCase() === newOpt.name.toLowerCase())) {
+        mergedList.push(newOpt);
+      }
+    });
+    finalTraits[key] = mergedList;
+  }
+  await saveTraitsRecord(finalTraits);
+  return finalTraits;
+}

@@ -1,4 +1,5 @@
 import { getDb } from "./mongo.model.js";
+import { collectBlobUrls, deleteUnreferencedBlobs } from "./blob.model.js";
 
 export async function fetchAllAnimes(): Promise<any[]> {
   const db = await getDb();
@@ -109,7 +110,9 @@ export async function deleteAnimeWithCharacters(malId: number): Promise<{ delete
   }
 
   if (idsToDelete.length > 0) {
+    const removedDocs = await characters.find({ _id: { $in: idsToDelete as any[] } }, { projection: { images: 1, imageUrl: 1 } }).toArray();
     await characters.deleteMany({ _id: { $in: idsToDelete as any[] } });
+    await deleteUnreferencedBlobs(collectBlobUrls(removedDocs));
   }
 
   await db.collection("animes").deleteOne({ _id: String(id) as any });

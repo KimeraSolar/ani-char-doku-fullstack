@@ -54,6 +54,7 @@ export default function TraitsConfigView({ characters, onRefreshCharacters, fire
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [importMode, setImportMode] = useState<"merge" | "overwrite">("merge");
   const [importedJson, setImportedJson] = useState<Record<string, TraitOption[]> | null>(null);
+  const [importedFile, setImportedFile] = useState<File | null>(null);
   const [importStatus, setImportStatus] = useState<"idle" | "success" | "error">("idle");
   const [importFeedback, setImportFeedback] = useState("");
   const [dragActive, setDragActive] = useState(false);
@@ -237,6 +238,8 @@ export default function TraitsConfigView({ characters, onRefreshCharacters, fire
 
   // Drop / File upload parsers
   const handleFileParse = (file: File) => {
+    setImportedJson(null);
+    setImportedFile(null);
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
@@ -267,6 +270,7 @@ export default function TraitsConfigView({ characters, onRefreshCharacters, fire
         }
 
         setImportedJson(normalized);
+        setImportedFile(file);
         setImportStatus("idle");
         setImportFeedback(`File read successfully! Contains ${Object.keys(normalized).length} traits ready for import.`);
       } catch (err) {
@@ -305,31 +309,16 @@ export default function TraitsConfigView({ characters, onRefreshCharacters, fire
 
   // Save imported traits list
   const handleSaveImported = async () => {
-    if (!importedJson) return;
+    if (!importedFile) return;
 
     try {
-      let finalTraits = {};
-      if (importMode === "overwrite") {
-        finalTraits = importedJson;
-      } else {
-        // Merge mode - union keys and unique merge array values
-        finalTraits = { ...traits };
-        for (const [key, values] of Object.entries(importedJson as Record<string, TraitOption[]>)) {
-          const currentValues = (finalTraits as any)[key] || [];
-          const mergedList = [...currentValues];
-          values.forEach((newOpt) => {
-            if (!mergedList.some(v => v.name.toLowerCase() === newOpt.name.toLowerCase())) {
-              mergedList.push(newOpt);
-            }
-          });
-          (finalTraits as any)[key] = mergedList;
-        }
-      }
+      const formData = new FormData();
+      formData.append("file", importedFile);
+      formData.append("mode", importMode);
 
-      const res = await fetch("/api/traits", {
+      const res = await fetch("/api/traits/import", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(finalTraits),
+        body: formData,
       });
 
       if (!res.ok) throw new Error();
@@ -341,6 +330,7 @@ export default function TraitsConfigView({ characters, onRefreshCharacters, fire
       setTimeout(() => {
         setShowImportDialog(false);
         setImportedJson(null);
+        setImportedFile(null);
         setImportStatus("idle");
         setImportFeedback("");
       }, 1500);

@@ -1,5 +1,6 @@
 export * from "./api.route.js";
 export * from "./firebase.route.js";
+export * from "./image.route.js";
 export * from "./anime.route.js";
 export * from "./character.route.js";
 export * from "./puzzle.route.js";

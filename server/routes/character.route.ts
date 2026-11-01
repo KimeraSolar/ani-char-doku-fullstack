@@ -1,5 +1,8 @@
 import { Express } from "express";
+import multer from "multer";
 import { batchUpdateCharacterTraits, deleteCharacterRecord, fetchAllCharacters, importCharactersBatch, saveCharacterRecord } from "../model/index.js";
+
+const upload = multer({ storage: multer.memoryStorage() });
 
 export async function characterRoutes(app: Express) {
     app.get("/api/database", async (req, res) => {
@@ -58,12 +61,21 @@ export async function characterRoutes(app: Express) {
         }
     });
 
-    app.post("/api/database/import", async (req, res) => {
+    app.post("/api/database/import", upload.single("file"), async (req, res) => {
         try {
-            const { characters: importedChars, mode } = req.body;
+            if (!req.file) {
+                return res.status(400).json({ error: "A JSON file is required." });
+            }
+            let importedChars: unknown;
+            try {
+                importedChars = JSON.parse(req.file.buffer.toString("utf-8"));
+            } catch {
+                return res.status(400).json({ error: "The uploaded file is not a valid JSON file." });
+            }
             if (!Array.isArray(importedChars)) {
                 return res.status(400).json({ error: "Imported data must be an array of characters." });
             }
+            const mode = req.body.mode === "overwrite" ? "overwrite" : "merge";
             const count = await importCharactersBatch(importedChars, mode);
             const allCharacters = await fetchAllCharacters();
             res.json({ success: true, count, total: allCharacters.length });
