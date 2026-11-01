@@ -1,6 +1,6 @@
 import express, { Request, Response } from 'express';
 import cors from 'cors';
-import { animeRoutes, apiRoutes, characterRoutes, firebaseRoutes, puzzleRoutes, traitRoutes, userRoutes } from '../server/routes/index.js';
+import { animeRoutes, apiRoutes, characterRoutes, firebaseRoutes, imageRoutes, puzzleRoutes, traitRoutes, userRoutes } from '../server/routes/index.js';
 
 const app = express();
 
@@ -20,6 +20,7 @@ await apiRoutes(app);
 await firebaseRoutes(app);
 await animeRoutes(app);
 await characterRoutes(app);
+await imageRoutes(app);
 await traitRoutes(app);
 await userRoutes(app);
 await puzzleRoutes(app);

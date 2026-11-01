@@ -461,7 +461,26 @@ function RegisterFormInner({
     return () => window.removeEventListener("paste", handleGlobalPaste);
   }, [showCropModal]);
 
-  const handleCropAndSave = () => {
+  const [uploadingImage, setUploadingImage] = useState(false);
+
+  const uploadCroppedImage = async (canvas: HTMLCanvasElement): Promise<string> => {
+    const blob = await new Promise<Blob>((resolve, reject) =>
+      canvas.toBlob(
+        (result) => (result ? resolve(result) : reject(new Error("Could not encode the cropped image."))),
+        "image/jpeg",
+        0.75
+      )
+    );
+    const formData = new FormData();
+    formData.append("file", blob, "character.jpg");
+
+    const res = await fetch("/api/images", { method: "POST", body: formData });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || "Failed to upload image.");
+    return data.url;
+  };
+
+  const handleCropAndSave = async () => {
     if (!cropImageSrc) return;
     
     const canvas = document.createElement("canvas");
@@ -497,10 +516,17 @@ function RegisterFormInner({
 
       try {
         ctx.drawImage(imgObj, -drawW / 2, -drawH / 2, drawW, drawH);
-        const base64Data = canvas.toDataURL("image/jpeg", 0.75);
-        
+      } catch (err) {
+        console.error("Cropping error:", err);
+        alert("Could not crop image. Download the image and upload the file.");
+        return;
+      }
+
+      setUploadingImage(true);
+      try {
+        const url = await uploadCroppedImage(canvas);
         const newImageItem = {
-          url: base64Data,
+          url,
           label: cropLabel.trim() || "Registry Image",
         };
 
@@ -514,9 +540,11 @@ function RegisterFormInner({
         setShowCropModal(false);
         setCropImageSrc("");
         setCropLabel("");
-      } catch (err) {
-        console.error("Cropping error:", err);
-        alert("Could not crop image. Download the image and upload the file.");
+      } catch (err: any) {
+        console.error("Image upload error:", err);
+        alert(err.message || "Could not upload image.");
+      } finally {
+        setUploadingImage(false);
       }
     }
   };
@@ -2225,9 +2253,10 @@ function RegisterFormInner({
                 <button
                   type="button"
                   onClick={handleCropAndSave}
-                  className="rounded-xl bg-indigo-600 hover:bg-indigo-500 px-5 py-2 text-xs font-black text-white transition-all shadow-md cursor-pointer"
+                  disabled={uploadingImage}
+                  className="rounded-xl bg-indigo-600 hover:bg-indigo-500 px-5 py-2 text-xs font-black text-white transition-all shadow-md cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Crop & Save Image
+                  {uploadingImage ? "Uploading..." : "Crop & Save Image"}
                 </button>
               </div>
 

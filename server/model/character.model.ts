@@ -1,4 +1,5 @@
 import { getDb } from "./mongo.model.js";
+import { collectBlobUrls, deleteUnreferencedBlobs, externalizeCharacterImages } from "./blob.model.js";
 import { fetchAllAnimes, saveAnimeRecord } from "./anime.model.js";
 import { fetchAnimeDetails } from "../mal-proxy/index.js";
 import { getEnglishTitle } from "@shared/utils/index.js";
@@ -205,13 +206,22 @@ export async function saveCharacterRecord(newChar: any): Promise<void> {
     return;
   }
 
+  // Base64 images are uploaded to Vercel Blob; the document keeps only their URLs
+  const storedCharData = await externalizeCharacterImages(finalCharData);
+  const previous = await db.collection("characters").findOne(
+    { _id: charId as any },
+    { projection: { images: 1, imageUrl: 1 } }
+  );
+
   // Live MongoDB Write
   try {
-    await db.collection("characters").replaceOne({ _id: charId as any }, finalCharData, { upsert: true });
+    await db.collection("characters").replaceOne({ _id: charId as any }, storedCharData, { upsert: true });
   } catch (err) {
     console.error("MongoDB save character error:", err);
     throw err;
   }
+
+  await deleteUnreferencedBlobs(collectBlobUrls([previous]));
 }
 
 export async function deleteCharacterRecord(id: string): Promise<void> {
@@ -221,8 +231,15 @@ export async function deleteCharacterRecord(id: string): Promise<void> {
     return;
   }
 
+  const existing = await db.collection("characters").findOne(
+    { _id: id as any },
+    { projection: { images: 1, imageUrl: 1 } }
+  );
+
   // Live MongoDB Delete
   await db.collection("characters").deleteOne({ _id: id as any });
+
+  await deleteUnreferencedBlobs(collectBlobUrls([existing]));
 }
 
 export async function batchUpdateCharacterTraits(
@@ -475,6 +492,16 @@ export async function importCharactersBatch(importedChars: any[], mode: "merge" 
 
   await ensureAnimesRegistered(animesToRegister);
 
+  const imageCache = new Map<string, string>();
+  for (let i = 0; i < sanitizedImported.length; i++) {
+    sanitizedImported[i] = await externalizeCharacterImages(sanitizedImported[i], imageCache);
+  }
+
+  const previousDocs = await db.collection("characters").find(
+    mode === "overwrite" ? {} : { _id: { $in: sanitizedImported.map((c) => c.id) as any[] } },
+    { projection: { images: 1, imageUrl: 1 } }
+  ).toArray();
+
   // Live MongoDB Write (Overwrite or Merge)
   if (mode === "overwrite") {
     await db.collection("characters").deleteMany({});
@@ -497,6 +524,8 @@ export async function importCharactersBatch(importedChars: any[], mode: "merge" 
       await db.collection("characters").bulkWrite(ops);
     }
   }
+
+  await deleteUnreferencedBlobs(collectBlobUrls(previousDocs));
 
   return sanitizedImported.length;
 }
