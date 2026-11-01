@@ -384,6 +384,7 @@ export default function DatabaseView({
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [dragActive, setDragActive] = useState(false);
   const [importedJsonData, setImportedJsonData] = useState<any[] | null>(null);
+  const [importedFile, setImportedFile] = useState<File | null>(null);
   const [importMode, setImportMode] = useState<"merge" | "overwrite">("merge");
   const [importingStatus, setImportingStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [importFeedback, setImportFeedback] = useState("");
@@ -391,6 +392,8 @@ export default function DatabaseView({
   // Process selected file
   const processJsonFile = (file: File) => {
     setImportFeedback("");
+    setImportedJsonData(null);
+    setImportedFile(null);
     if (file.type !== "application/json" && !file.name.endsWith(".json")) {
       setImportFeedback("Invalid file format. Please upload a standard JSON database file.");
       return;
@@ -405,6 +408,7 @@ export default function DatabaseView({
           return;
         }
         setImportedJsonData(parsed);
+        setImportedFile(file);
       } catch (e) {
         setImportFeedback("Unable to parse file. Please verify it contains well-formed JSON.");
       }
@@ -428,17 +432,16 @@ export default function DatabaseView({
 
   // Submit parsed data to custom backend post API
   const handleTriggerImportCommit = async () => {
-    if (!importedJsonData) return;
+    if (!importedFile) return;
     setImportingStatus("loading");
     setImportFeedback("");
     try {
+      const formData = new FormData();
+      formData.append("file", importedFile);
+      formData.append("mode", importMode);
       const response = await fetch("/api/database/import", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          characters: importedJsonData,
-          mode: importMode,
-        }),
+        body: formData,
       });
       if (!response.ok) {
         const errData = await response.json().catch(() => ({}));

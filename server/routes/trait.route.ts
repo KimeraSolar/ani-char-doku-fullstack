@@ -1,5 +1,26 @@
 import { Express } from "express";
-import { addTraitValue, fetchAllTraits, removeTraitAndCleanCharacters, renameTraitKey, saveTraitsRecord, updateTraitDefinition } from "../model/index.js";
+import multer from "multer";
+import { addTraitValue, fetchAllTraits, importTraitsBatch, removeTraitAndCleanCharacters, renameTraitKey, saveTraitsRecord, updateTraitDefinition } from "../model/index.js";
+
+const upload = multer({ storage: multer.memoryStorage() });
+
+function normalizeTraitsFile(json: unknown): Record<string, { name: string; description: string }[]> | null {
+    if (!json || typeof json !== "object" || Array.isArray(json)) return null;
+    const normalized: Record<string, { name: string; description: string }[]> = {};
+    for (const [k, v] of Object.entries(json)) {
+        if (!Array.isArray(v)) return null;
+        normalized[k] = v.map((item: any) => {
+            if (typeof item === "string") {
+                return { name: item, description: `${item} characteristic for ${k.replace(/_/g, " ")}` };
+            }
+            return {
+                name: String(item?.name || "").trim(),
+                description: String(item?.description || "").trim(),
+            };
+        });
+    }
+    return normalized;
+}
 
 export async function traitRoutes(app: Express) {
     app.get("/api/traits", async (req, res) => {
@@ -33,6 +54,30 @@ export async function traitRoutes(app: Express) {
         } catch (err) {
             console.error("Failed to save traits database:", err);
             res.status(500).json({ error: "Failed to save traits database." });
+        }
+    });
+
+    app.post("/api/traits/import", upload.single("file"), async (req, res) => {
+        try {
+            if (!req.file) {
+                return res.status(400).json({ error: "A traits JSON file is required." });
+            }
+            let parsed: unknown;
+            try {
+                parsed = JSON.parse(req.file.buffer.toString("utf-8"));
+            } catch {
+                return res.status(400).json({ error: "The uploaded file is not a valid JSON file." });
+            }
+            const normalized = normalizeTraitsFile(parsed);
+            if (!normalized) {
+                return res.status(400).json({ error: "Invalid format. The traits backup needs to be a JSON object whose values are arrays." });
+            }
+            const mode = req.body.mode === "overwrite" ? "overwrite" : "merge";
+            const traits = await importTraitsBatch(normalized, mode);
+            res.json({ success: true, traits });
+        } catch (err) {
+            console.error("Failed to import traits:", err);
+            res.status(500).json({ error: "Failed to import traits database." });
         }
     });
 
