@@ -43,7 +43,7 @@ export default function TraitsConfigView({ characters, onRefreshCharacters, fire
   // Edit Trait state
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [editTraitName, setEditTraitName] = useState("");
-  const [editTraitValues, setEditTraitValues] = useState<TraitOption[]>([]);
+  const [editTraitValues, setEditTraitValues] = useState<(TraitOption & { originalName?: string })[]>([]);
   const [newValueInput, setNewValueInput] = useState("");
   const [newDescInput, setNewDescInput] = useState("");
 
@@ -137,7 +137,7 @@ export default function TraitsConfigView({ characters, onRefreshCharacters, fire
   const startEditing = (key: string) => {
     setEditingKey(key);
     setEditTraitName(key);
-    setEditTraitValues([...(traits[key] || [])]);
+    setEditTraitValues((traits[key] || []).map((v) => ({ ...v, originalName: v.name })));
     setNewValueInput("");
     setNewDescInput("");
   };
