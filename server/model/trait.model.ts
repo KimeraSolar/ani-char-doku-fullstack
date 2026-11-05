@@ -147,15 +147,16 @@ export async function renameTraitKey(oldKey: string, newKey: string): Promise<Re
 export async function updateTraitDefinition(
   key: string,
   newKey: string | null,
-  values: TraitOption[]
+  values: (TraitOption & { originalName?: string })[]
 ): Promise<Record<string, TraitOption[]>> {
   const db = await getDb();
   const trimmedKey = key.trim();
   const trimmedNew = newKey ? newKey.trim() : trimmedKey;
 
-  // Sanitize values
+  // Sanitize values and track renamed options so characters can follow the new name
   const seenNames = new Set<string>();
   const sanitizedValues: TraitOption[] = [];
+  const renamedValues = new Map<string, string>();
   for (const v of values) {
     const name = String(v.name || "").trim();
     if (name && !seenNames.has(name.toLowerCase())) {
@@ -164,6 +165,10 @@ export async function updateTraitDefinition(
         name,
         description: String(v.description || "").trim(),
       });
+      const originalName = String(v.originalName || "").trim();
+      if (originalName && originalName !== name) {
+        renamedValues.set(originalName, name);
+      }
     }
   }
 
@@ -199,7 +204,8 @@ export async function updateTraitDefinition(
           ? charVal.split(",").map((v) => v.trim()).filter(Boolean)
           : [];
 
-        const filteredVals = currentVals.filter((v: string) => valueNames.includes(v));
+        const remappedVals = currentVals.map((v: string) => renamedValues.get(v) ?? v);
+        const filteredVals = [...new Set(remappedVals.filter((v: string) => valueNames.includes(v)))];
         const updatedTraitsMap = { ...doc.traits };
 
         if (trimmedNew !== trimmedKey) {
